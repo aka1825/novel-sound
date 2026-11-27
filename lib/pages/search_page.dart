@@ -7,10 +7,13 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/book_source.dart';
 import '../models/media_item.dart';
 import '../models/media_id.dart';
 import '../models/search_discovery.dart';
 import '../services/api_client.dart';
+import '../services/book_source_engine.dart';
+import '../services/book_source_store.dart';
 import '../services/drama_feature_preferences.dart';
 import '../services/app_theme_style.dart';
 import '../services/backend_transport.dart';
@@ -22,6 +25,7 @@ import '../widgets/app_ui/app_ui_scope.dart';
 import '../widgets/desktop_shell_scope.dart';
 import '../widgets/home/home_design.dart';
 import '../widgets/home/home_media_card.dart';
+import '../widgets/home/home_sheet.dart';
 import '../widgets/home/home_shelf.dart';
 import '../widgets/search/classic_search_content_toolbar.dart';
 import '../widgets/search/classic_search_discovery.dart';
@@ -32,6 +36,8 @@ import '../widgets/search/search_media_tile.dart';
 import '../widgets/search/search_score_filter.dart';
 import '../widgets/wenku/wenku_ui.dart';
 import 'detail_page.dart';
+import 'book_source_book_page.dart';
+import 'book_sources_page.dart';
 import 'search_shuqi.dart';
 
 typedef SearchPageLoader =
@@ -255,6 +261,15 @@ class _SearchPageState extends State<SearchPage> {
   /// 分类页签置灰并停止响应点击；退出书旗只能点「番茄」。
   bool _shuqiSource = false;
 
+  /// 选中的自定义书源；null 表示跟随上面的「番茄 / 书旗」两段开关。
+  String? _bookSourceId;
+
+  final BookSourceStore _bookSourceStore = BookSourceStore.instance;
+  BookSourceEngine? _bookSourceEngine;
+  List<BookSourceSearchItem> _bookSourceItems = const [];
+  bool _bookSourceBusy = false;
+  String? _bookSourceError;
+
   /// The 书旗 source is the segmented control's last value.
   static const _shuqiSegment = -1;
 
@@ -330,6 +345,12 @@ class _SearchPageState extends State<SearchPage> {
     _scrollController.addListener(_onScroll);
     _loadHistory();
     unawaited(_loadLayout());
+    // 书源选择器要先把自建书源读出来（芯片上的名称依赖它）。
+    unawaited(
+      _bookSourceStore.load().then((_) {
+        if (mounted) setState(() {});
+      }),
+    );
     unawaited(_loadMinimumScore());
     unawaited(_loadHotSearch());
     final tag = widget.initialTag?.trim() ?? '';
@@ -759,6 +780,16 @@ class _SearchPageState extends State<SearchPage> {
     }
     FocusManager.instance.primaryFocus?.unfocus();
     _rememberQuery(query);
+    // 选了自建书源：搜索、结果、详情全部走那条源的规则，不碰番茄/书旗的 feed。
+    if (_bookSourceId != null) {
+      setState(() {
+        _query = query;
+        _draft = query;
+        _suggestions = const [];
+      });
+      await _searchBookSource(query);
+      return;
+    }
     ++_requestGeneration;
     // Picking a suggestion runs a different query than the text typed so far, so
     // the draft follows the executed query; otherwise the suggestion panel would
@@ -1070,6 +1101,7 @@ class _SearchPageState extends State<SearchPage> {
     _scrollController.dispose();
     _searchFocus.dispose();
     _ctrl.dispose();
+    _bookSourceEngine?.dispose();
     super.dispose();
   }
 
@@ -1145,6 +1177,331 @@ class _SearchPageState extends State<SearchPage> {
 
   /// Upstream expanded search plate: one 46dp glass capsule holding a 44dp
   /// search glyph, the embedded field and a 46dp close button.
+  // ── 书源选择器（番茄 / 书旗 / 自建书源）────────────────────────────────
+  BookSource? get _selectedBookSource =>
+      _bookSourceId == null ? null : _bookSourceStore.byId(_bookSourceId!);
+
+  String get _sourceChipLabel {
+    final custom = _selectedBookSource;
+    if (custom != null) return custom.name;
+    return _shuqiSource ? '书旗小说' : '番茄小说';
+  }
+
+  /// 搜索框右缘的来源芯片：点开「选择书源」弹层。
+  Widget _sourceChip(BuildContext context) {
+    final palette = HomePalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: HomePressable(
+        onTap: _showSourceSheet,
+        borderRadius: BorderRadius.circular(999),
+        semanticLabel: '选择书源，当前 $_sourceChipLabel',
+        child: Container(
+          key: const ValueKey('search-source-chip'),
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: palette.soft,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                LucideIcons.library_big,
+                size: 14,
+                color: palette.accentText,
+              ),
+              const SizedBox(width: 5),
+              AppText(
+                _sourceChipLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11.5, color: palette.ink),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showSourceSheet() async {
+    final palette = HomePalette.of(context);
+    final sources = _bookSourceStore.sources;
+    await showHomeSheet<void>(
+      context: context,
+      title: '选择书源',
+      children: [
+        _sourceOption(
+          palette,
+          label: '番茄小说',
+          subtitle: '内置 · 无需配置',
+          selected: _bookSourceId == null && !_shuqiSource,
+          onTap: () {
+            Navigator.pop(context);
+            _selectBookSource(null);
+          },
+        ),
+        _sourceOption(
+          palette,
+          label: '书旗小说',
+          subtitle: '内置 · 无需配置',
+          selected: _bookSourceId == null && _shuqiSource,
+          onTap: () {
+            Navigator.pop(context);
+            _selectBookSource(null, shuqi: true);
+          },
+        ),
+        for (final source in sources)
+          _sourceOption(
+            palette,
+            label: source.name,
+            subtitle: '自建 · ${source.baseUrl}',
+            selected: _bookSourceId == source.id,
+            onTap: () {
+              Navigator.pop(context);
+              _selectBookSource(source.id);
+            },
+          ),
+        _sourceOption(
+          palette,
+          label: '管理书源',
+          subtitle: '新增、导入与测试',
+          selected: false,
+          icon: LucideIcons.settings_2,
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute<void>(builder: (_) => const BookSourcesPage()),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _sourceOption(
+    HomePalette palette, {
+    required String label,
+    required String subtitle,
+    required bool selected,
+    required VoidCallback onTap,
+    IconData? icon,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: HomePressable(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        semanticLabel: label,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          child: Row(
+            children: [
+              Icon(
+                icon ?? LucideIcons.book_open,
+                size: 18,
+                color: palette.muted,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AppText(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: palette.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    AppText(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: palette.muted),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected)
+                Icon(LucideIcons.check, size: 18, color: palette.accentText),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _selectBookSource(String? id, {bool shuqi = false}) {
+    setState(() {
+      _bookSourceId = id;
+      _bookSourceItems = const [];
+      _bookSourceError = null;
+      _bookSourceBusy = false;
+    });
+    if (id == null) {
+      _selectSource(shuqi);
+      return;
+    }
+    final query = _query;
+    if (query.isNotEmpty) unawaited(_searchBookSource(query));
+  }
+
+  Future<void> _searchBookSource(String query) async {
+    final source = _selectedBookSource;
+    if (source == null) return;
+    final generation = ++_requestGeneration;
+    setState(() {
+      _bookSourceBusy = true;
+      _bookSourceError = null;
+      _bookSourceItems = const [];
+    });
+    final engine = _bookSourceEngine ??= BookSourceEngine();
+    try {
+      final outcome = await engine.searchAll([source], query);
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() {
+        _bookSourceItems = outcome.items;
+        _bookSourceBusy = false;
+        if (outcome.items.isEmpty) {
+          _bookSourceError = outcome.failures.isEmpty
+              ? '这条书源里没有搜到相关作品'
+              : outcome.failures.join('；');
+        }
+      });
+    } catch (_) {
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() {
+        _bookSourceBusy = false;
+        _bookSourceError = '搜索失败，请检查这条书源的规则';
+      });
+    }
+  }
+
+  void _openBookSourceItem(BookSourceSearchItem item) {
+    final source = _bookSourceStore.byId(item.sourceId);
+    if (source == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => BookSourceBookPage(source: source, item: item),
+      ),
+    );
+  }
+
+  /// 自建书源模式下的结果区：与番茄/书旗的 feed 完全隔离。
+  Widget _bookSourceContent(BuildContext context) {
+    final palette = HomePalette.of(context);
+    if (_bookSourceBusy && _bookSourceItems.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_bookSourceItems.isEmpty) {
+      final error = _bookSourceError;
+      return _notice(
+        context,
+        ContentNotice(
+          icon: CupertinoIcons.search,
+          title: error ?? '在当前书源里搜索',
+          message: error == null ? '当前书源：$_sourceChipLabel' : null,
+          onRetry: error == null ? null : () => _searchBookSource(_query),
+        ),
+      );
+    }
+    return ListView.builder(
+      key: const ValueKey('book-source-search-results'),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        _bodyTopInset(context) + 8,
+        16,
+        MediaQuery.paddingOf(context).bottom + 32,
+      ),
+      itemCount: _bookSourceItems.length,
+      itemBuilder: (context, index) {
+        final item = _bookSourceItems[index];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: ContentPanel(
+            onTap: () => _openBookSourceItem(item),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _bookSourceCover(palette, item.coverUrl),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppText(
+                        item.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: palette.ink,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      AppText(
+                        '${item.author ?? '佚名'} · 小说 · ${item.sourceName}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12.5, color: palette.muted),
+                      ),
+                      if (item.intro case final intro?) ...[
+                        const SizedBox(height: 6),
+                        AppText(
+                          intro,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.5,
+                            color: palette.muted,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _bookSourceCover(HomePalette palette, String? url) {
+    final placeholder = Container(
+      width: 52,
+      height: 70,
+      decoration: BoxDecoration(
+        color: palette.soft,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(LucideIcons.book_open, size: 20, color: palette.muted),
+    );
+    if (url == null || url.isEmpty) return placeholder;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.network(
+        url,
+        width: 52,
+        height: 70,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stack) => placeholder,
+      ),
+    );
+  }
+
   Widget _searchBar(BuildContext context) => LiquidGlass(
     key: const ValueKey('expanded-search-bar'),
     radius: 23,
@@ -1171,6 +1528,7 @@ class _SearchPageState extends State<SearchPage> {
               onSubmitted: _search,
             ),
           ),
+          _sourceChip(context),
           SizedBox(
             width: 46,
             height: 46,
@@ -1254,6 +1612,7 @@ class _SearchPageState extends State<SearchPage> {
   );
 
   Widget _content(BuildContext context, _SearchFeed feed) {
+    if (_bookSourceId != null) return _bookSourceContent(context);
     if (_showSuggestions) {
       return SearchSuggestionList(
         suggestions: _suggestions,
