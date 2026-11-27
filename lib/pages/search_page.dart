@@ -38,7 +38,6 @@ import '../widgets/wenku/wenku_ui.dart';
 import 'detail_page.dart';
 import 'book_source_book_page.dart';
 import 'book_sources_page.dart';
-import 'qimao_page.dart';
 import 'search_shuqi.dart';
 
 typedef SearchPageLoader =
@@ -264,9 +263,6 @@ class _SearchPageState extends State<SearchPage> {
 
   /// 选中的自定义书源；null 表示跟随上面的「番茄 / 书旗」两段开关。
   String? _bookSourceId;
-
-  /// 选中内置「猫小说」（Rust 适配器，不走配置规则）。
-  bool _qimaoSource = false;
 
   final BookSourceStore _bookSourceStore = BookSourceStore.instance;
   BookSourceEngine? _bookSourceEngine;
@@ -784,16 +780,7 @@ class _SearchPageState extends State<SearchPage> {
     }
     FocusManager.instance.primaryFocus?.unfocus();
     _rememberQuery(query);
-    // 选了自建书源 / 内置猫小说：搜索、结果、详情全部走那条源，不碰番茄/书旗的 feed。
-    if (_qimaoSource) {
-      setState(() {
-        _query = query;
-        _draft = query;
-        _suggestions = const [];
-      });
-      await _searchQimao(query);
-      return;
-    }
+    // 选了自建书源：搜索、结果、详情全部走那条源的规则，不碰番茄/书旗的 feed。
     if (_bookSourceId != null) {
       setState(() {
         _query = query;
@@ -1191,14 +1178,10 @@ class _SearchPageState extends State<SearchPage> {
   /// Upstream expanded search plate: one 46dp glass capsule holding a 44dp
   /// search glyph, the embedded field and a 46dp close button.
   // ── 书源选择器（番茄 / 书旗 / 自建书源）────────────────────────────────
-  /// 内置「猫小说」结果的 sourceId 标记（不是真实的书源 id）。
-  static const String _qimaoBuiltinSourceId = 'qimao:builtin';
-
   BookSource? get _selectedBookSource =>
       _bookSourceId == null ? null : _bookSourceStore.byId(_bookSourceId!);
 
   String get _sourceChipLabel {
-    if (_qimaoSource) return '猫小说';
     final custom = _selectedBookSource;
     if (custom != null) return custom.name;
     return _shuqiSource ? '书旗小说' : '番茄小说';
@@ -1254,7 +1237,7 @@ class _SearchPageState extends State<SearchPage> {
           palette,
           label: '番茄小说',
           subtitle: '内置 · 无需配置',
-          selected: _bookSourceId == null && !_qimaoSource && !_shuqiSource,
+          selected: _bookSourceId == null && !_shuqiSource,
           onTap: () {
             Navigator.pop(context);
             _selectBookSource(null);
@@ -1264,20 +1247,10 @@ class _SearchPageState extends State<SearchPage> {
           palette,
           label: '书旗小说',
           subtitle: '内置 · 无需配置',
-          selected: _bookSourceId == null && !_qimaoSource && _shuqiSource,
+          selected: _bookSourceId == null && _shuqiSource,
           onTap: () {
             Navigator.pop(context);
             _selectBookSource(null, shuqi: true);
-          },
-        ),
-        _sourceOption(
-          palette,
-          label: '猫小说',
-          subtitle: '内置 · 核心适配器，无需配置',
-          selected: _qimaoSource,
-          onTap: () {
-            Navigator.pop(context);
-            _selectQimao();
           },
         ),
         for (final source in sources)
@@ -1368,7 +1341,6 @@ class _SearchPageState extends State<SearchPage> {
 
   void _selectBookSource(String? id, {bool shuqi = false}) {
     setState(() {
-      _qimaoSource = false;
       _bookSourceId = id;
       _bookSourceItems = const [];
       _bookSourceError = null;
@@ -1380,67 +1352,6 @@ class _SearchPageState extends State<SearchPage> {
     }
     final query = _query;
     if (query.isNotEmpty) unawaited(_searchBookSource(query));
-  }
-
-  /// 切到内置「猫小说」：走核心的 qimao 适配器，规则不可改。
-  void _selectQimao() {
-    setState(() {
-      _qimaoSource = true;
-      _bookSourceId = null;
-      _bookSourceItems = const [];
-      _bookSourceError = null;
-      _bookSourceBusy = false;
-    });
-    final query = _query;
-    if (query.isNotEmpty) unawaited(_searchQimao(query));
-  }
-
-  /// 猫小说搜索：调用核心 `/api/v1/qimao/search`，结果复用同一套行渲染。
-  Future<void> _searchQimao(String query) async {
-    final generation = ++_requestGeneration;
-    setState(() {
-      _bookSourceBusy = true;
-      _bookSourceError = null;
-      _bookSourceItems = const [];
-    });
-    try {
-      final payload = await ApiClient.instance.qimaoSearch(query);
-      if (!mounted || generation != _requestGeneration) return;
-      final data = payload['data'];
-      final items = <BookSourceSearchItem>[];
-      if (data is List) {
-        for (final entry in data) {
-          if (entry is! Map) continue;
-          final map = Map<String, dynamic>.from(entry);
-          final id = '${map['bookId'] ?? ''}';
-          final name = '${map['name'] ?? ''}';
-          if (id.isEmpty || name.isEmpty) continue;
-          items.add(
-            BookSourceSearchItem(
-              // 内置适配器的结果用固定 sourceId 标记，点开时走 QimaoPage。
-              sourceId: _qimaoBuiltinSourceId,
-              sourceName: '猫小说',
-              name: name,
-              bookUrl: id,
-              author: '${map['author'] ?? ''}',
-              coverUrl: '${map['coverUrl'] ?? ''}',
-              intro: '${map['intro'] ?? ''}',
-            ),
-          );
-        }
-      }
-      setState(() {
-        _bookSourceBusy = false;
-        _bookSourceItems = items;
-        if (items.isEmpty) _bookSourceError = '猫小说里没有搜到相关作品';
-      });
-    } catch (_) {
-      if (!mounted || generation != _requestGeneration) return;
-      setState(() {
-        _bookSourceBusy = false;
-        _bookSourceError = '猫小说搜索失败，请稍后重试';
-      });
-    }
   }
 
   Future<void> _searchBookSource(String query) async {
@@ -1475,16 +1386,6 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   void _openBookSourceItem(BookSourceSearchItem item) {
-    if (item.sourceId == _qimaoBuiltinSourceId) {
-      Navigator.push(
-        context,
-        MaterialPageRoute<void>(
-          builder: (_) =>
-              QimaoPage(initialBookId: item.bookUrl, initialName: item.name),
-        ),
-      );
-      return;
-    }
     final source = _bookSourceStore.byId(item.sourceId);
     if (source == null) return;
     Navigator.push(
@@ -1509,11 +1410,7 @@ class _SearchPageState extends State<SearchPage> {
           icon: CupertinoIcons.search,
           title: error ?? '在当前书源里搜索',
           message: error == null ? '当前书源：$_sourceChipLabel' : null,
-          onRetry: error == null
-              ? null
-              : () => _qimaoSource
-                    ? _searchQimao(_query)
-                    : _searchBookSource(_query),
+          onRetry: error == null ? null : () => _searchBookSource(_query),
         ),
       );
     }
@@ -1715,7 +1612,6 @@ class _SearchPageState extends State<SearchPage> {
   );
 
   Widget _content(BuildContext context, _SearchFeed feed) {
-    if (_qimaoSource) return _bookSourceContent(context);
     if (_bookSourceId != null) return _bookSourceContent(context);
     if (_showSuggestions) {
       return SearchSuggestionList(
