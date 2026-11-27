@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 
 import '../../pages/about_page.dart';
+import '../../pages/book_sources_page.dart';
 import '../../pages/cached_books_page.dart';
 import '../../pages/cached_dramas_page.dart';
 import '../../pages/library_backup_page.dart';
@@ -119,6 +120,11 @@ class ClassicMineEntries extends StatelessWidget {
       child: Column(
         children: [
           Divider(height: 1, thickness: 0.6, color: palette.line),
+          ClassicMineEntryRow(
+            icon: LucideIcons.library_big,
+            label: '书源管理',
+            onTap: () => _push(context, const BookSourcesPage()),
+          ),
           if (showTools) ...[
             ClassicMineEntryRow(
               icon: LucideIcons.hard_drive_download,

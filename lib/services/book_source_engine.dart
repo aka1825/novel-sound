@@ -220,6 +220,10 @@ class BookSourceRuleEvaluator {
         return collapseWhitespace(value);
       case 'stripHtml':
         return collapseWhitespace(innerText(html_parser.parseFragment(value)));
+      case 'lower':
+        return value.toLowerCase();
+      case 'upper':
+        return value.toUpperCase();
       case 'abs':
         final base = baseUrl;
         if (base == null) return value;

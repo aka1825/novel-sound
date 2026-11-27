@@ -298,7 +298,7 @@ class _BookSourceEditorPageState extends State<BookSourceEditorPage> {
       const SettingsHint(
         '规则写法：css:.选择器 内文、css:.选择器@href 取属性、'
         'regex:正则 取第一个分组、json:data.list[0].name 取 JSON 字段；'
-        '后面可用 |> 串加工步骤 trim / stripHtml / abs。'
+        '后面可用 |> 串加工步骤 trim / stripHtml / abs / lower / upper。'
         '地址模板支持 {{key}}、{{page}}、{{baseUrl}}。',
         fontSize: 12.5,
       ),

@@ -165,6 +165,14 @@ void main() {
       );
     });
 
+    test('|> 步骤 lower / upper', () {
+      final evaluator = BookSourceRuleEvaluator(
+        baseUrl: Uri.parse('https://site.test/x'),
+      );
+      expect(evaluator.text(r'AbC-123', r'regex:(\w+-\d+)|>lower'), 'abc-123');
+      expect(evaluator.text(r'AbC-123', r'regex:(\w+-\d+)|>upper'), 'ABC-123');
+    });
+
     test('regex 取第一个非空分组', () {
       final evaluator = BookSourceRuleEvaluator(
         baseUrl: Uri.parse('https://site.test/search'),

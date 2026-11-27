@@ -1,7 +1,9 @@
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 
 import '../../pages/about_page.dart';
+import '../../pages/book_sources_page.dart';
 import '../../pages/cached_books_page.dart';
 import '../../pages/cached_dramas_page.dart';
 import '../../pages/library_backup_page.dart';
@@ -20,6 +22,14 @@ class MineEntries extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        FeatureEntry(
+          key: const ValueKey('mine-book-sources'),
+          title: '书源管理',
+          subtitle: '自定义书源、导入与测试',
+          icon: LucideIcons.library_big,
+          onTap: () => _push(context, const BookSourcesPage()),
+        ),
+        SizedBox(height: style.entryGap),
         FeatureEntry(
           key: const ValueKey('mine-settings'),
           title: '设置',

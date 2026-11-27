@@ -4,7 +4,12 @@ fqapp 原本只有两条写死的书源（番茄 / 书旗）。这套功能补�
 **用户自己写规则的第三方站点**——搜索、详情、目录、正文全部由一份 JSON 描述，
 不经过 Rust 核心，也不改动番茄/书旗的任何链路。
 
-入口：**设置 → 阅读 → 自定义书源**。
+入口：**我的 → 书源管理**。页面按产品稿排版：顶部返回 + 居中标题 + 右上「导入 / 导出」；
+列表先是两条内置书源（番茄 / 书旗，右侧「内置」标记，规则随包提供不可改），
+接着是自建书源（开关 = 是否参与多源搜索，铅笔 = 改规则，垃圾桶 = 删除），
+再是「AI 编写指南」，最后一行规则说明；右下角悬浮「添加书源」。
+
+点自建书源的整行 = **用这个书源搜书**（直接进搜索页，只搜它一条）。
 
 ## 目录结构
 
@@ -13,14 +18,14 @@ fqapp 原本只有两条写死的书源（番茄 / 书旗）。这套功能补�
 | `lib/models/book_source.dart` | 书源模型、规则字段、校验、legado JSON 子集导入 |
 | `lib/services/book_source_engine.dart` | 抓取 + 规则求值（css / regex / json + `\|>` 加工）|
 | `lib/services/book_source_store.dart` | `shared_preferences` 持久化、导入导出、增删改 |
-| `lib/pages/book_sources_page.dart` | 书源管理（列表 / 开关 / 导入 / 导出）|
+| `lib/pages/book_sources_page.dart` | 书源管理（内置源 / 自建源 / AI 指南 / 导入导出）|
 | `lib/pages/book_source_editor_page.dart` | 规则编辑 + 就地测试搜索 |
-| `lib/pages/book_source_search_page.dart` | 多书源并发搜索 |
+| `lib/pages/book_source_search_page.dart` | 多书源并发搜索（可从管理页锁定单源进来）|
 | `lib/pages/book_source_book_page.dart` | 详情 + 目录 |
 | `lib/pages/book_source_reader_page.dart` | 正文阅读（上一章 / 下一章 / 目录）|
 | `test/book_source_engine_test.dart` | 规则引擎与存储的单测（全离线）|
 
-设置页入口只加了一行 `SettingsItem`（`lib/pages/settings_page.dart` 的「阅读」分类）。
+入口是 `lib/widgets/mine/mine_entries.dart` 里的第一张卡片（我的 → 书源管理）。
 
 ## 规则语法
 
@@ -46,6 +51,7 @@ fqapp 原本只有两条写死的书源（番茄 / 书旗）。这套功能补�
 | `trim`（或 `text`）| 每行去首尾空格、行内连续空白压成一个空格 |
 | `stripHtml` | 去掉残留标签并解码实体（简介、作者这类字段常用）|
 | `abs` | 相对地址补全成绝对地址（封面、详情页、章节地址常用）|
+| `lower` / `upper` | 转小写 / 大写（作者名、标签归一用）|
 
 示例：
 
@@ -112,6 +118,15 @@ json:data.list[0].title     JSON 接口的书名
 
 新建议书源时编辑器会预填同一组示例值，把它改成目标站点的选择器即可。
 
+## AI 编写指南
+
+管理页的「AI 编写指南」卡片打开一个弹层，里面是给 AI 用的完整提示词（规则语法、
+JSON 形状、必填项、硬性限制）。点「复制」后把提示词和站点地址一起粘给 AI，
+它输出的 JSON 可以直接从右上「导入」粘回来。
+
+提示词文本在 `lib/pages/book_sources_page.dart` 的 `_aiPrompt` 里，和引擎实现
+放在同一个仓库，改语法时记得一起改——两边口径漂移会直接变成「导入成功但抓不到」。
+
 ## legado 书源兼容
 
 `导入书源` 接受 legado 书源 JSON 的一个子集：
@@ -145,7 +160,7 @@ flutter analyze lib/models/book_source.dart lib/services/book_source_engine.dart
   lib/services/book_source_store.dart lib/pages/book_source_*.dart \
   lib/pages/book_sources_page.dart
 flutter test test/book_source_engine_test.dart
-flutter run   # 设置 → 阅读 → 自定义书源
+flutter run   # 我的 → 书源管理 → 添加书源 → 填站点地址 → 运行测试
 ```
 
 调试一条新站点时的顺序建议：

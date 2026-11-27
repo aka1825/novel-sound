@@ -15,9 +15,12 @@ import '../widgets/wenku/wenku_ui.dart';
 import 'book_source_book_page.dart';
 
 class BookSourceSearchPage extends StatefulWidget {
-  const BookSourceSearchPage({super.key, this.store});
+  const BookSourceSearchPage({super.key, this.store, this.onlySourceId});
 
   final BookSourceStore? store;
+
+  /// 只搜这一条书源；为 null 时搜所有启用的书源。
+  final String? onlySourceId;
 
   @override
   State<BookSourceSearchPage> createState() => _BookSourceSearchPageState();
@@ -34,6 +37,16 @@ class _BookSourceSearchPageState extends State<BookSourceSearchPage> {
   String? _error;
   List<BookSourceSearchItem> _items = const [];
   List<String> _failures = const [];
+
+  /// 当前参与搜索的书源：全部启用项，或从书源管理页点进来时的那一条。
+  List<BookSource> get _targets {
+    final only = widget.onlySourceId;
+    if (only == null) return _store.enabledSources;
+    return [
+      for (final source in _store.sources)
+        if (source.id == only && source.enabled) source,
+    ];
+  }
 
   @override
   void initState() {
@@ -64,7 +77,7 @@ class _BookSourceSearchPageState extends State<BookSourceSearchPage> {
       _items = const [];
     });
     try {
-      final outcome = await _engine.searchAll(_store.enabledSources, keyword);
+      final outcome = await _engine.searchAll(_targets, keyword);
       if (!mounted) return;
       setState(() {
         _searched = true;
@@ -84,6 +97,15 @@ class _BookSourceSearchPageState extends State<BookSourceSearchPage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// 顶部状态行的文案：搜索中 / 全部启用源 / 单源模式。
+  String _statusLabel() {
+    final targets = _targets;
+    if (_busy) return '正在搜索 ${targets.length} 个书源…';
+    if (widget.onlySourceId == null) return '启用中：${targets.length} 个书源';
+    final name = targets.isEmpty ? '已停用' : targets.first.name;
+    return '当前书源：$name';
   }
 
   void _open(BookSourceSearchItem item) {
@@ -131,9 +153,7 @@ class _BookSourceSearchPageState extends State<BookSourceSearchPage> {
                 children: [
                   Expanded(
                     child: Text(
-                      _busy
-                          ? '正在搜索 ${_store.enabledSources.length} 个书源…'
-                          : '启用中：${_store.enabledSources.length} 个书源',
+                      _statusLabel(),
                       style: TextStyle(
                         fontSize: 12,
                         color: HomePalette.of(context).muted,
