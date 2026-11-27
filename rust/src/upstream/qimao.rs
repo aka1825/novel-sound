@@ -94,14 +94,40 @@ fn numeric_entity_regex() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"&#(x?[0-9A-Fa-f]{1,8});").expect("numeric entity"))
 }
 
+fn div_token_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?i)</?div\b").expect("div token"))
+}
+
+/// 取出 `.article` 容器的 HTML 片段（按 `<div>` 深度配平）。
+///
+/// 只按 `</p>` 扫全页是不够的：章节页的文章容器后面还跟着导航/推荐区，
+/// 那里也有 `<p>`，会把「上一章」这类文案混进正文。
+fn article_fragment(html: &str) -> Option<&str> {
+    let marker = article_marker_regex().find(html)?;
+    let tag_end = marker.end() + html[marker.end()..].find('>')? + 1;
+    let rest = &html[tag_end..];
+    let mut depth = 1usize;
+    for token in div_token_regex().find_iter(rest) {
+        if rest[token.start()..].starts_with("</") {
+            depth -= 1;
+            if depth == 0 {
+                return Some(&rest[..token.start()]);
+            }
+        } else {
+            depth += 1;
+        }
+    }
+    None
+}
+
 /// 章节页正文：取 `.article` 容器里的所有 `<p>`，逐段去标签、压空白、跳过空段。
 ///
 /// 找不到容器时返回空串——调用方据此报「正文没取到」，而不是把整页导航当正文。
 pub fn article_text(html: &str) -> String {
-    let Some(marker) = article_marker_regex().find(html) else {
+    let Some(body) = article_fragment(html) else {
         return String::new();
     };
-    let body = &html[marker.start()..];
     let mut out: Vec<String> = Vec::new();
     for caps in paragraph_regex().captures_iter(body) {
         if out.len() >= MAX_PARAGRAPHS {
@@ -186,6 +212,8 @@ mod tests {
         assert!(lines[2].contains("加粗"));
         assert!(lines[2].contains("'引号'"));
         assert!(lines[2].contains("&符号"));
+        // 文章容器之后的导航区同样带 <p>，必须靠 div 深度配平挡在外面。
+        assert!(!text.contains("上一章"), "导航段落混进正文了: {text}");
     }
 
     #[test]
