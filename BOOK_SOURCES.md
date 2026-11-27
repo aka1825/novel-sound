@@ -52,6 +52,12 @@ fqapp 原本只有两条写死的书源（番茄 / 书旗）。这套功能补�
 | `stripHtml` | 去掉残留标签并解码实体（简介、作者这类字段常用）|
 | `abs` | 相对地址补全成绝对地址（封面、详情页、章节地址常用）|
 | `lower` / `upper` | 转小写 / 大写（作者名、标签归一用）|
+| `prefix:<文本>` | 在前面拼固定文本（拼接口地址、路径前缀）|
+| `suffix:<文本>` | 在后面拼固定文本 |
+| `tpl:<模板>` | 按模板拼串，`{{value}}` 是当前值，`{{bookId}}` 是引擎从书籍地址里抠出的书号 |
+
+`tpl:` 是给「接口型站」准备的：搜索/目录走 JSON 接口时，接口往往只回章节 id，
+章节地址要自己拼。例如 `tpl:https://www.qimao.com/shuku/{{bookId}}-{{value}}/`。
 
 示例：
 
@@ -82,6 +88,46 @@ json:data.list[0].title     JSON 接口的书名
 以 `/` 开头按站点地址补全；不带协议的相对地址同理。
 
 ## 一个能直接导入的示例
+
+下面这条是**实测通过**的七猫小说书源（接口型：搜索/目录走 JSON 接口，正文走章节页 HTML）：
+
+```json
+{
+  "id": "src_qimao",
+  "name": "七猫小说",
+  "baseUrl": "https://api-www.qimao.com",
+  "searchUrl": "/api/search/result?keyword={{key}}&page=1&pageSize=20",
+  "enabled": true,
+  "headers": {},
+  "rules": {
+    "searchList": "json:data.search_list",
+    "searchName": "json:title",
+    "searchAuthor": "json:author",
+    "searchCover": "json:image_link",
+    "searchIntro": "json:intro",
+    "searchBookUrl": "json:read_url",
+    "detailTocUrl": "tpl:https://api-www.qimao.com/api/book/chapter-list?book_id={{bookId}}",
+    "tocList": "json:data.chapters",
+    "tocName": "json:title",
+    "tocUrl": "tpl:https://www.qimao.com/shuku/{{bookId}}-{{value}}/",
+    "content": "css:.chapter-detail-article .article"
+  }
+}
+```
+
+链路拆开看（全部实测 200）：
+
+| 环节 | 实际请求 | 结果 |
+| --- | --- | --- |
+| 搜索 | `GET api-www.qimao.com/api/search/result?keyword=斗破&page=1&pageSize=20` | `data.search_list[]`，一页 15 条 |
+| 书籍地址 | 搜索结果里的 `read_url` | `https://www.qimao.com/shuku/10007988/` |
+| 目录 | `GET api-www.qimao.com/api/book/chapter-list?book_id=10007988` | `data.chapters[]`，一次给全（这本书 400 章）|
+| 章节地址 | `tpl:…/shuku/{{bookId}}-{{value}}/` | `https://www.qimao.com/shuku/10007988-17697840140001/` |
+| 正文 | 章节页 HTML 的 `.chapter-detail-article .article` | 38 个 `<p>`，整章文本 |
+
+限制：搜索只取第一页 15 条（引擎暂不支持翻页）；VIP 章节页面不放正文，打开会提示「没取到正文」。
+
+## 另一个示例：纯 HTML 站
 
 ```json
 {
