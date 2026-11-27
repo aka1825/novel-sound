@@ -67,12 +67,11 @@ pub fn internal_chapter_url(book_id: &str, chapter_id: &str) -> String {
 
 fn article_marker_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    // 只认「class 里把 article 当成一个独立 token」的情况：写死 `article` 会漏掉
-    // 站点偶尔追加的 `article font-18`，而只做子串匹配又会先命中外层容器
-    // `chapter-detail-article`，把导航段的 `<p>` 一起吞进来。
-    RE.get_or_init(|| {
-        Regex::new(r#"class="(?:[^"]*\s+)?article(?:\s+[^"]*)?""#).expect("article marker")
-    })
+    // 必须把 `article` 当成 class 的第一个 token：写成「包含 article」会先命中
+    // 外层容器 `chapter-detail-article font-18`（`article` 后面紧跟 ` font-18"`），
+    // 于是导航段的 `<p>上一章</p>` 会混进正文。站点偶尔会追加 `article font-18`
+    // 这类后缀，所以允许尾随 token。
+    RE.get_or_init(|| Regex::new(r#"class="article(?:\s+[^"]*)?""#).expect("article marker"))
 }
 
 fn paragraph_regex() -> &'static Regex {
