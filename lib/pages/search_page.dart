@@ -1399,14 +1399,20 @@ class _SearchPageState extends State<SearchPage> {
   /// 自建书源模式下的结果区：与番茄/书旗的 feed 完全隔离。
   Widget _bookSourceContent(BuildContext context) {
     final palette = HomePalette.of(context);
+    // 档案风格的搜索栏是浮在内容上方的玻璃条，头部高度要自己留；经典风格是
+    // 实心 AppBar，body 已经在它下面，再留一次就会空出一大截。
+    final classic = AppUiScope.isClassic(context);
+    final topPadding = classic ? 12.0 : _bodyTopInset(context) + 8;
     if (_bookSourceBusy && _bookSourceItems.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_bookSourceItems.isEmpty) {
       final error = _bookSourceError;
-      return _notice(
-        context,
-        ContentNotice(
+      return Padding(
+        padding: EdgeInsets.only(
+          top: classic ? 24 : _bodyTopInset(context) - 20,
+        ),
+        child: ContentNotice(
           icon: CupertinoIcons.search,
           title: error ?? '在当前书源里搜索',
           message: error == null ? '当前书源：$_sourceChipLabel' : null,
@@ -1418,7 +1424,7 @@ class _SearchPageState extends State<SearchPage> {
       key: const ValueKey('book-source-search-results'),
       padding: EdgeInsets.fromLTRB(
         16,
-        _bodyTopInset(context) + 8,
+        topPadding,
         16,
         MediaQuery.paddingOf(context).bottom + 32,
       ),
@@ -2082,7 +2088,12 @@ class _SearchPageState extends State<SearchPage> {
         backgroundColor: palette.canvas,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: _classicSearchField(palette),
+        title: Row(
+          children: [
+            Expanded(child: _classicSearchField(palette)),
+            _sourceChip(context),
+          ],
+        ),
       ),
       body: Column(
         children: [
@@ -2169,6 +2180,7 @@ class _SearchPageState extends State<SearchPage> {
   );
 
   Widget _classicContent(BuildContext context, _SearchFeed feed) {
+    if (_bookSourceId != null) return _bookSourceContent(context);
     if (_showSuggestions) {
       return ClassicSearchSuggestionList(
         suggestions: _suggestions,
