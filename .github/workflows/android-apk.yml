@@ -44,6 +44,14 @@ on:
     # unrelated PRs from running the full build.
     paths: *app_paths
   workflow_dispatch:
+    inputs:
+      # 手动触发时才有的开关：没有 release keystore 又想装到手机上时勾它，
+      # 额外产出一个用 debug key 签名的 APK。release 产物与「release 绝不用
+      # debug key」那条红线都不受影响（release 仍然 unsigned 或被正式签名）。
+      build_debug_apk:
+        description: '额外构建可安装的 debug 签名 APK'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -442,6 +450,26 @@ jobs:
         # device does not download the ARM64 native libraries and vice versa.
         # Keep pub enabled to regenerate the release plugin registrant after tests.
         run: flutter build apk --release --target-platform android-arm,android-arm64 --split-per-abi
+
+      # 只在手动触发且勾了 build_debug_apk 时才跑：debug 版本由 Gradle 用
+      # debug keystore 自动签名，因此可以直接安装（release 在无 keystore secret
+      # 时是 unsigned，装不上）。两条构建互不影响，release 产物照旧。
+      - name: Compile an installable debug APK (manual runs only)
+        if: ${{ inputs.build_debug_apk == true }}
+        run: |
+          flutter build apk --debug --target-platform android-arm64
+          cp build/app/outputs/flutter-apk/app-debug.apk \
+            build/app/outputs/flutter-apk/app-arm64-debug-installable.apk
+          ls -l build/app/outputs/flutter-apk/
+
+      - name: Upload the installable debug APK
+        if: ${{ inputs.build_debug_apk == true }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: fqapp-debug-installable-${{ steps.artifact-ids.outputs.safe_ref }}-${{ steps.artifact-ids.outputs.short_sha }}-${{ github.run_number }}
+          retention-days: 14
+          if-no-files-found: error
+          path: app/build/app/outputs/flutter-apk/app-arm64-debug-installable.apk
 
       - name: Test Android runtime boundaries
         working-directory: app/android
