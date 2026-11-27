@@ -4,6 +4,8 @@
 // 站点公开接口（`/api/search/result`、`/api/book/chapter-list`）并解析章节页。
 // 所以这里的 UI 刻意做得很薄：只负责调 `ApiClient.qimao*` 三个方法并展示。
 
+import 'dart:async';
+
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -13,10 +15,14 @@ import '../widgets/home/home_design.dart';
 import '../widgets/wenku/wenku_ui.dart';
 
 class QimaoPage extends StatefulWidget {
-  const QimaoPage({super.key, this.api});
+  const QimaoPage({super.key, this.api, this.initialBookId, this.initialName});
 
   /// 单测可注入；正常走进程内客户端。
   final ApiClient? api;
+
+  /// 从搜索页点结果进来时带上书号：直接落到目录，不要求再搜一次。
+  final String? initialBookId;
+  final String? initialName;
 
   @override
   State<QimaoPage> createState() => _QimaoPageState();
@@ -63,6 +69,29 @@ class _QimaoPageState extends State<QimaoPage> {
   List<_QimaoChapter> _chapters = const [];
   int _index = 0;
   String? _content;
+
+  @override
+  void initState() {
+    super.initState();
+    final bookId = widget.initialBookId;
+    if (bookId != null && bookId.isNotEmpty) {
+      // 搜索页点结果进来：直接拉目录。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(
+          _openBook(
+            _QimaoBook(
+              id: bookId,
+              name: widget.initialName ?? '猫小说',
+              author: '',
+              cover: '',
+              intro: '',
+            ),
+          ),
+        );
+      });
+    }
+  }
 
   @override
   void dispose() {

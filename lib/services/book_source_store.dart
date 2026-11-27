@@ -26,13 +26,13 @@ class BookSourceStore extends ChangeNotifier {
   /// 导入文本上限：正常一份书源 JSON 只有几 KB，512KB 足够挡住误粘贴。
   static const int maxImportChars = 512 * 1024;
 
-  /// 默认书源：七猫小说（公开 JSON 接口 + 章节页正文，实测可用）。
+  /// 默认书源：猫小说（公开 JSON 接口 + 章节页正文，实测可用）。
   ///
   /// 与内置适配器（Rust `qimao` 路由）并存：这里是「配置版」，走 Dart 规则引擎，
   /// 用户可以在编辑页里改；内置那条走核心，不占配置。
   static const BookSource qimaoDefault = BookSource(
     id: 'src_qimao',
-    name: '七猫小说',
+    name: '猫小说',
     baseUrl: 'https://api-www.qimao.com',
     searchUrl: '/api/search/result?keyword={{key}}&page=1&pageSize=20',
     rules: BookSourceRules(

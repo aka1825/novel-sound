@@ -55,9 +55,9 @@ const List<_BuiltinSource> _builtinSources = [
   _BuiltinSource(name: '番茄小说', baseUrl: 'https://fangnovel.com', avatar: '番'),
   _BuiltinSource(name: '书旗小说', baseUrl: 'https://www.shuqi.com', avatar: '书'),
   _BuiltinSource(
-    name: '七猫小说',
+    name: '猫小说',
     baseUrl: 'https://www.qimao.com',
-    avatar: '七',
+    avatar: '猫',
     browsable: true,
   ),
 ];
