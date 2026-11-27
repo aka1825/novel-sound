@@ -34,6 +34,7 @@ pub fn match_rest_path(path: &str, query: &Params) -> Option<RouteMatch> {
         "novels" => match_novels(tail, query),
         "search" => match_search(tail, query),
         "shuqi" => match_shuqi(tail, query),
+        "qimao" => match_qimao(tail, query),
         "category" => Some(RouteMatch {
             api: "category_front",
             params: query.clone(),
@@ -288,6 +289,22 @@ fn match_shuqi(parts: &[&str], q: &Params) -> Option<RouteMatch> {
         "book" => "shuqi_book",
         "toc" => "shuqi_toc",
         "chapter" => "shuqi_chapter",
+        _ => return None,
+    };
+    Some(RouteMatch {
+        api,
+        params: q.clone(),
+    })
+}
+
+fn match_qimao(parts: &[&str], q: &Params) -> Option<RouteMatch> {
+    if parts.is_empty() {
+        return None;
+    }
+    let api = match parts[0] {
+        "search" => "qimao_search",
+        "toc" => "qimao_toc",
+        "chapter" => "qimao_chapter",
         _ => return None,
     };
     Some(RouteMatch {

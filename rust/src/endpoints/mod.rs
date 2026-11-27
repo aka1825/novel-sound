@@ -18,6 +18,7 @@ pub mod dhcontent;
 pub mod full;
 pub mod home;
 pub mod manga;
+pub mod qimao;
 pub mod reader_video;
 pub mod router;
 pub mod search;
@@ -177,6 +178,7 @@ pub mod server {
     pub fn register_all(s: &mut Server) {
         search::register(s);
         shuqi::register(s);
+        qimao::register(s);
         home::register(s);
         book::register(s);
         content::register(s);

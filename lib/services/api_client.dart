@@ -433,6 +433,37 @@ class ApiClient {
     return _decodeAsync(r);
   }
 
+  /// 七猫数据源：搜索。
+  ///
+  /// 走核心里的 `qimao` 适配器（公开 JSON 接口，无需签名与 Cookie）；站点一页
+  /// 固定给 15 条，`page` 大于 1 时才会真的翻页。
+  Future<Map<String, dynamic>> qimaoSearch(String key, {int page = 1}) async {
+    final r = await _get(
+      _url('/api/v1/qimao/search', {'key': key, 'page': '$page'}),
+    );
+    return _decodeAsync(r);
+  }
+
+  /// 七猫数据源：目录（一次给全，章节地址按 `/qmch/<bookId>/<chapterId>` 生成）。
+  Future<Map<String, dynamic>> qimaoToc(String bookId) async {
+    final r = await _get(_url('/api/v1/qimao/toc', {'book_id': bookId}));
+    return _decodeAsync(r);
+  }
+
+  /// 七猫数据源：正文。付费章节核心会报「article block missing」，这里如实上抛。
+  Future<Map<String, dynamic>> qimaoChapter(
+    String bookId,
+    String chapterId,
+  ) async {
+    final r = await _get(
+      _url('/api/v1/qimao/chapter', {
+        'book_id': bookId,
+        'chapter_id': chapterId,
+      }),
+    );
+    return _decodeAsync(r);
+  }
+
   /// Search with JSON decoding and model parsing combined into one isolate
   /// hop. This avoids decoding a large response in one isolate and then
   /// copying the resulting map into a second isolate for normalization.

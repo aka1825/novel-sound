@@ -21,6 +21,7 @@ import '../widgets/settings/settings_widgets.dart';
 import '../widgets/wenku/wenku_ui.dart';
 import 'book_source_editor_page.dart';
 import 'book_source_search_page.dart';
+import 'qimao_page.dart';
 
 class BookSourcesPage extends StatefulWidget {
   const BookSourcesPage({super.key, this.store});
@@ -39,16 +40,26 @@ class _BuiltinSource {
     required this.name,
     required this.baseUrl,
     required this.avatar,
+    this.browsable = false,
   });
 
   final String name;
   final String baseUrl;
   final String avatar;
+
+  /// true 表示这个内置源有自己的浏览页（七猫），点整行可以直接搜书。
+  final bool browsable;
 }
 
 const List<_BuiltinSource> _builtinSources = [
   _BuiltinSource(name: '番茄小说', baseUrl: 'https://fangnovel.com', avatar: '番'),
   _BuiltinSource(name: '书旗小说', baseUrl: 'https://www.shuqi.com', avatar: '书'),
+  _BuiltinSource(
+    name: '七猫小说',
+    baseUrl: 'https://www.qimao.com',
+    avatar: '七',
+    browsable: true,
+  ),
 ];
 
 class _BookSourcesPageState extends State<BookSourcesPage> {
@@ -254,7 +265,14 @@ class _BookSourcesPageState extends State<BookSourcesPage> {
                                   subtitle: '内置 · ${builtin.baseUrl}',
                                   trailing: _builtinChip(palette),
                                 ),
-                                onTap: () => _toast('内置书源随包提供，规则不可修改'),
+                                onTap: builtin.browsable
+                                    ? () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute<void>(
+                                          builder: (_) => const QimaoPage(),
+                                        ),
+                                      )
+                                    : () => _toast('内置书源随包提供，规则不可修改'),
                               ),
                               const SizedBox(height: 10),
                             ],

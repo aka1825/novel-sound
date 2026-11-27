@@ -51,6 +51,10 @@ enum SourceGroup {
   /// it shares nothing with the Fanqie device pool).
   shuqi,
 
+  /// The independent Qimao source: `/qimao/...` (public JSON API + chapter-page
+  /// HTML; no signature, no device registration, no shared plumbing).
+  qimao,
+
   /// Real-account endpoints: `/account/...`. Pinned local, see [SourceRouter].
   account,
 
@@ -149,6 +153,8 @@ class SourceRouter {
         return SourceGroup.account;
       case 'shuqi':
         return SourceGroup.shuqi;
+      case 'qimao':
+        return SourceGroup.qimao;
       case 'search':
       case 'recommend':
       case 'category':

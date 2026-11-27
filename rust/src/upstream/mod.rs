@@ -15,6 +15,8 @@ pub(crate) mod playback_trace;
 pub fn reset_playback_route_state_for_tests() {
     playback_routes::reset_state_for_tests();
 }
+/// 七猫小说：公开 JSON 接口 + 章节页 HTML，无需签名与设备注册。
+pub mod qimao;
 pub mod shuqi;
 
 pub use client::{ClientError, PinnedDevice, UpstreamClient, UpstreamRequest};
