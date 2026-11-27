@@ -243,8 +243,7 @@ class BookSourceRuleEvaluator {
     final index = body.lastIndexOf('@');
     if (index <= 0) return (body.trim(), null);
     final attribute = body.substring(index + 1).trim();
-    if (attribute.isEmpty ||
-        attribute.contains(RegExp(r'[\s>+~\[\]()]'))) {
+    if (attribute.isEmpty || attribute.contains(RegExp(r'[\s>+~\[\]()]'))) {
       return (body.trim(), null);
     }
     return (body.substring(0, index).trim(), attribute);
@@ -291,7 +290,10 @@ String innerText(dom.Node node) {
 
 /// 折叠空白：每行去首尾空格、行内连续空白压成一个空格。
 String collapseWhitespace(String value) {
-  final lines = value.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n');
+  final lines = value
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n')
+      .split('\n');
   final out = <String>[];
   for (final line in lines) {
     final cleaned = line.replaceAll(RegExp(r'[ \t\u00a0\u3000]+'), ' ').trim();
@@ -442,7 +444,10 @@ class BookSourceEngine {
   ) async {
     final trimmed = keyword.trim();
     if (trimmed.isEmpty) return const [];
-    final uri = buildUri(source.searchUrl, source, {'key': trimmed, 'page': '1'});
+    final uri = buildUri(source.searchUrl, source, {
+      'key': trimmed,
+      'page': '1',
+    });
     final page = await get(uri, source: source);
     final evaluator = evaluatorFor(page.url);
     final nodes = evaluator.elements(page.root, source.rules.searchList);
@@ -616,7 +621,8 @@ class BookSourceEngine {
     final trimmed = raw?.trim();
     if (trimmed == null || trimmed.isEmpty) return null;
     final direct = Uri.tryParse(trimmed);
-    if (direct != null && (direct.scheme == 'http' || direct.scheme == 'https')) {
+    if (direct != null &&
+        (direct.scheme == 'http' || direct.scheme == 'https')) {
       return direct.toString();
     }
     if (trimmed.startsWith('javascript:') || trimmed.startsWith('#')) {

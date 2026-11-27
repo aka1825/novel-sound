@@ -125,77 +125,76 @@ class _BookSourceBookPageState extends State<BookSourceBookPage> {
     }
     return ListView(
       key: const ValueKey('book-source-book'),
-      padding: featurePadding(context).copyWith(
-        bottom: MediaQuery.paddingOf(context).bottom + 32,
-      ),
+      padding: featurePadding(
+        context,
+      ).copyWith(bottom: MediaQuery.paddingOf(context).bottom + 32),
       children: [
         _header(palette, book),
         const SizedBox(height: 12),
         if (book.intro case final intro? when intro.isNotEmpty) ...[
-                  ContentPanel(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppText(
-                          '简介',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 8),
-                        AppText(
-                          intro,
-                          maxLines: _introExpanded ? null : 5,
-                          overflow: _introExpanded
-                              ? TextOverflow.visible
-                              : TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            height: 1.7,
-                            color: palette.muted,
-                          ),
-                        ),
-                        if (intro.length > 120)
-                          GestureDetector(
-                            onTap: () => setState(
-                              () => _introExpanded = !_introExpanded,
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: AppText(
-                                _introExpanded ? '收起' : '展开',
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  color: palette.accentText,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: AppText(
-                          '目录',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      AppText(
-                        '共 ${_chapters.length} 章',
-                        style: TextStyle(fontSize: 12, color: palette.muted),
-                      ),
-                    ],
+          ContentPanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppText(
+                  '简介',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                AppText(
+                  intro,
+                  maxLines: _introExpanded ? null : 5,
+                  overflow: _introExpanded
+                      ? TextOverflow.visible
+                      : TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.7,
+                    color: palette.muted,
                   ),
                 ),
-                for (var index = 0; index < _chapters.length; index++)
-                  _chapterRow(palette, index),
+                if (intro.length > 120)
+                  GestureDetector(
+                    onTap: () =>
+                        setState(() => _introExpanded = !_introExpanded),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: AppText(
+                        _introExpanded ? '收起' : '展开',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: palette.accentText,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: AppText(
+                  '目录',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              AppText(
+                '共 ${_chapters.length} 章',
+                style: TextStyle(fontSize: 12, color: palette.muted),
+              ),
+            ],
+          ),
+        ),
+        for (var index = 0; index < _chapters.length; index++)
+          _chapterRow(palette, index),
       ],
     );
   }

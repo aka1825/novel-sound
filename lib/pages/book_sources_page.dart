@@ -47,11 +47,7 @@ class _BuiltinSource {
 }
 
 const List<_BuiltinSource> _builtinSources = [
-  _BuiltinSource(
-    name: '番茄小说',
-    baseUrl: 'https://fangnovel.com',
-    avatar: '番',
-  ),
+  _BuiltinSource(name: '番茄小说', baseUrl: 'https://fangnovel.com', avatar: '番'),
   _BuiltinSource(name: '书旗小说', baseUrl: 'https://www.shuqi.com', avatar: '书'),
 ];
 
@@ -453,10 +449,7 @@ class _BookSourcesPageState extends State<BookSourcesPage> {
       color: palette.soft,
       borderRadius: BorderRadius.circular(10),
     ),
-    child: AppText(
-      '内置',
-      style: TextStyle(fontSize: 12, color: palette.muted),
-    ),
+    child: AppText('内置', style: TextStyle(fontSize: 12, color: palette.muted)),
   );
 
   Widget _customActions(HomePalette palette, BookSource source) => Row(

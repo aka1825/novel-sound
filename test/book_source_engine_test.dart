@@ -124,10 +124,7 @@ class _FakeClient extends http.BaseClient {
     return http.StreamedResponse(
       Stream.value(utf8.encode(body)),
       200,
-      headers: {
-        'content-type': 'text/html; charset=utf-8',
-        ...headers,
-      },
+      headers: {'content-type': 'text/html; charset=utf-8', ...headers},
       request: request,
     );
   }
@@ -158,7 +155,10 @@ void main() {
 
     test('|> 步骤 stripHtml 与 abs', () {
       final evaluator = BookSourceRuleEvaluator(baseUrl: page.url);
-      expect(evaluator.text(page.root, 'css:.intro|>stripHtml'), contains('萧炎'));
+      expect(
+        evaluator.text(page.root, 'css:.intro|>stripHtml'),
+        contains('萧炎'),
+      );
       expect(
         evaluator.text(page.root, 'css:img@src|>abs'),
         'https://site.test/cover/1.jpg',
@@ -342,18 +342,25 @@ void main() {
       expect(relative.toString(), 'https://site.test/search.php?q=a');
 
       expect(
-        BookSourceEngine.absoluteUrl('/book/9', Uri.parse('https://x.test/a/b')),
+        BookSourceEngine.absoluteUrl(
+          '/book/9',
+          Uri.parse('https://x.test/a/b'),
+        ),
         'https://x.test/book/9',
       );
       expect(
-        BookSourceEngine.absoluteUrl('javascript:void(0)', Uri.parse('https://x.test')),
+        BookSourceEngine.absoluteUrl(
+          'javascript:void(0)',
+          Uri.parse('https://x.test'),
+        ),
         isNull,
       );
     });
 
     test('取不到正文时抛出可读错误', () async {
       final client = _FakeClient({
-        'https://site.test/chapter/9': '<html><body><div id="empty"></div></body></html>',
+        'https://site.test/chapter/9':
+            '<html><body><div id="empty"></div></body></html>',
       });
       final engine = BookSourceEngine(client: client);
       await expectLater(

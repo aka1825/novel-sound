@@ -205,7 +205,12 @@ class _BookSourceSearchPageState extends State<BookSourceSearchPage> {
     }
     return ListView.builder(
       key: const ValueKey('book-source-search-results'),
-      padding: EdgeInsets.fromLTRB(16, 4, 16, MediaQuery.paddingOf(context).bottom + 32),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        4,
+        16,
+        MediaQuery.paddingOf(context).bottom + 32,
+      ),
       itemCount: _items.length + (_failures.isEmpty ? 0 : 1),
       itemBuilder: (context, index) {
         if (index == _items.length) {

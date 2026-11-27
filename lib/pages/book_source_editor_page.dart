@@ -49,36 +49,20 @@ class _BookSourceEditorPageState extends State<BookSourceEditorPage> {
   List<BookSourceSearchItem>? _testItems;
 
   static const List<_RuleField> _searchFields = [
-    _RuleField(
-      'searchList',
-      '搜索结果列表',
-      '命中一个元素 = 一条结果，例如 css:#booklist li',
-    ),
+    _RuleField('searchList', '搜索结果列表', '命中一个元素 = 一条结果，例如 css:#booklist li'),
     _RuleField('searchName', '书名', '相对上一条元素取值，例如 css:.name'),
     _RuleField('searchAuthor', '作者', '例如 css:.author|>stripHtml'),
     _RuleField('searchCover', '封面', '例如 css:img@src|>abs'),
     _RuleField('searchIntro', '简介', '例如 css:.intro|>stripHtml'),
-    _RuleField(
-      'searchBookUrl',
-      '详情页地址',
-      '一般是 css:a@href|>abs，相对地址会自动补全',
-    ),
+    _RuleField('searchBookUrl', '详情页地址', '一般是 css:a@href|>abs，相对地址会自动补全'),
   ];
 
   static const List<_RuleField> _detailFields = [
     _RuleField('detailName', '书名', '留空沿用搜索结果，例如 css:h1'),
     _RuleField('detailAuthor', '作者', '例如 css:.author'),
     _RuleField('detailCover', '封面', '例如 css:.cover img@src|>abs'),
-    _RuleField(
-      'detailIntro',
-      '简介',
-      '例如 css:.intro|>stripHtml；可继续用 |> 串更多步骤',
-    ),
-    _RuleField(
-      'detailTocUrl',
-      '目录页地址',
-      '留空则用详情页当目录页，例如 css:a.toc@href|>abs',
-    ),
+    _RuleField('detailIntro', '简介', '例如 css:.intro|>stripHtml；可继续用 |> 串更多步骤'),
+    _RuleField('detailTocUrl', '目录页地址', '留空则用详情页当目录页，例如 css:a.toc@href|>abs'),
   ];
 
   static const List<_RuleField> _tocFields = [

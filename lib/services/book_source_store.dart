@@ -179,14 +179,13 @@ class BookSourceStore extends ChangeNotifier {
             throw FormatException('最多 ${BookSource.maxSources} 个书源');
           }
           next.add(
-            source.id.isEmpty
-                ? source.copyWith(id: newBookSourceId())
-                : source,
+            source.id.isEmpty ? source.copyWith(id: newBookSourceId()) : source,
           );
         }
         imported++;
       } catch (error) {
-        firstError ??= '${map['name'] ?? map['bookSourceName'] ?? '未命名'}：'
+        firstError ??=
+            '${map['name'] ?? map['bookSourceName'] ?? '未命名'}：'
             '${error is FormatException ? error.message : '格式不正确'}';
       }
     }

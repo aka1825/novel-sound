@@ -69,7 +69,11 @@ class _BookSourceReaderPageState extends State<BookSourceReaderPage> {
     super.dispose();
   }
 
-  Future<void> _load(int index, {bool keepScroll = true, bool reload = false}) async {
+  Future<void> _load(
+    int index, {
+    bool keepScroll = true,
+    bool reload = false,
+  }) async {
     final chapter = widget.chapters.isEmpty ? null : widget.chapters[index];
     if (chapter == null) {
       setState(() {
