@@ -127,6 +127,10 @@ json:data.list[0].title     JSON 接口的书名
 
 限制：搜索只取第一页 15 条（引擎暂不支持翻页）；VIP 章节页面不放正文，打开会提示「没取到正文」。
 
+这条已经作为**默认书源**随包带上：首次进「我的 → 书源管理」时自动写入
+（`BookSourceStore.qimaoDefault` + `seedDefaults()`，用一次性标记
+`custom_book_sources_seed_v1` 记录）。删掉之后不会再被自动补回，想恢复就手动导入。
+
 ## 另一个示例：纯 HTML 站
 
 ```json

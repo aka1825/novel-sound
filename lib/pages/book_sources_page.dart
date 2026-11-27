@@ -77,6 +77,12 @@ class _BookSourcesPageState extends State<BookSourcesPage> {
 
   Future<void> _load() async {
     await _store.load();
+    // 首次打开补一条默认书源（七猫）；删掉后不会再自动加回来。
+    try {
+      await _store.seedDefaults();
+    } catch (_) {
+      // 播种失败不影响页面本身：用户仍可手动导入。
+    }
     if (mounted) setState(() => _loading = false);
   }
 
