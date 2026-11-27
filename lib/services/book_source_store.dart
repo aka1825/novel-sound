@@ -18,38 +18,8 @@ class BookSourceStore extends ChangeNotifier {
 
   static const String preferenceKey = 'custom_book_sources_v1';
 
-  /// 首次进书源管理时补默认书源的一次性标记。
-  ///
-  /// 用标记而不是「列表为空就补」：用户主动删掉七猫之后，不该又被塞回来。
-  static const String seedPreferenceKey = 'custom_book_sources_seed_v1';
-
   /// 导入文本上限：正常一份书源 JSON 只有几 KB，512KB 足够挡住误粘贴。
   static const int maxImportChars = 512 * 1024;
-
-  /// 默认书源：猫小说（公开 JSON 接口 + 章节页正文，实测可用）。
-  ///
-  /// 与内置适配器（Rust `qimao` 路由）并存：这里是「配置版」，走 Dart 规则引擎，
-  /// 用户可以在编辑页里改；内置那条走核心，不占配置。
-  static const BookSource qimaoDefault = BookSource(
-    id: 'src_qimao',
-    name: '猫小说',
-    baseUrl: 'https://api-www.qimao.com',
-    searchUrl: '/api/search/result?keyword={{key}}&page=1&pageSize=20',
-    rules: BookSourceRules(
-      searchList: 'json:data.search_list',
-      searchName: 'json:title',
-      searchAuthor: 'json:author',
-      searchCover: 'json:image_link',
-      searchIntro: 'json:intro',
-      searchBookUrl: 'json:read_url',
-      detailTocUrl:
-          'tpl:https://api-www.qimao.com/api/book/chapter-list?book_id={{bookId}}',
-      tocList: 'json:data.chapters',
-      tocName: 'json:title',
-      tocUrl: 'json:id|>tpl:https://www.qimao.com/shuku/{{bookId}}-{{value}}/',
-      content: 'css:.chapter-detail-article .article',
-    ),
-  );
 
   List<BookSource> _sources = const [];
   String? _warning;
@@ -78,20 +48,6 @@ class BookSourceStore extends ChangeNotifier {
       if (source.id == id) return source;
     }
     return null;
-  }
-
-  /// 首次打开书源管理时补一条默认书源（[qimaoDefault]）。
-  ///
-  /// 只在「没播种过 + 当前一条都没有」时写入，并立刻打标记：之后无论用户是
-  /// 删掉还是继续添加，都不会再被自动补回来。
-  Future<void> seedDefaults() async {
-    await load();
-    final preferences = await SharedPreferences.getInstance();
-    if (preferences.getBool(seedPreferenceKey) == true) return;
-    final seeded = await preferences.setBool(seedPreferenceKey, true);
-    if (!seeded) return;
-    if (_sources.isNotEmpty) return;
-    await upsert(qimaoDefault);
   }
 
   Future<void> load() async {
