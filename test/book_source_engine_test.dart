@@ -189,6 +189,18 @@ void main() {
         ),
         'https://www.site.test/shuku/10007988-17697840140001/',
       );
+      // 整条规则只有一步（没有取值原语）：书源 JSON 里就是这么写的。
+      expect(
+        evaluator.text(
+          page.root,
+          'tpl:https://api.test/api/book/chapter-list?book_id={{bookId}}',
+        ),
+        'https://api.test/api/book/chapter-list?book_id=10007988',
+      );
+      expect(
+        evaluator.text(page.root, 'prefix:https://s.test/'),
+        'https://s.test/',
+      );
     });
 
     test('regex 取第一个非空分组', () {
@@ -220,6 +232,20 @@ void main() {
       expect(text, contains('第一段'));
       expect(text!.split('\n').length >= 3, isTrue);
       expect(text, isNot(contains('var x')));
+    });
+
+    test('{{value}} 没有取值原语时明确报错', () {
+      final evaluator = BookSourceRuleEvaluator(
+        baseUrl: Uri.parse('https://api.test/x'),
+        vars: const {'bookId': '10007988'},
+      );
+      expect(
+        () => evaluator.text(
+          page.root,
+          'tpl:https://www.site.test/shuku/{{bookId}}-{{value}}/',
+        ),
+        throwsA(isA<BookSourceException>()),
+      );
     });
 
     test('不认识的步骤会明确报错', () {
@@ -574,7 +600,8 @@ void main() {
               'tpl:https://api.test/api/book/chapter-list?book_id={{bookId}}',
           tocList: 'json:data.chapters',
           tocName: 'json:title',
-          tocUrl: 'tpl:https://www.qimao.test/shuku/{{bookId}}-{{value}}/',
+          tocUrl:
+              'json:id|>tpl:https://www.qimao.test/shuku/{{bookId}}-{{value}}/',
           content: 'css:.chapter-detail-article .article',
         ),
       );

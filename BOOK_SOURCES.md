@@ -109,7 +109,7 @@ json:data.list[0].title     JSON 接口的书名
     "detailTocUrl": "tpl:https://api-www.qimao.com/api/book/chapter-list?book_id={{bookId}}",
     "tocList": "json:data.chapters",
     "tocName": "json:title",
-    "tocUrl": "tpl:https://www.qimao.com/shuku/{{bookId}}-{{value}}/",
+    "tocUrl": "json:id|>tpl:https://www.qimao.com/shuku/{{bookId}}-{{value}}/",
     "content": "css:.chapter-detail-article .article"
   }
 }

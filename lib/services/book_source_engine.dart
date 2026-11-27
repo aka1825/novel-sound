@@ -118,10 +118,25 @@ class BookSourceRuleEvaluator {
     final trimmed = rule.trim();
     if (trimmed.isEmpty) return null;
     final pipeline = trimmed.split('|>');
-    final first = _primitive(pipeline.first.trim(), root);
-    if (first == null) return null;
-    var current = first;
-    for (final step in pipeline.skip(1)) {
+    final head = pipeline.first.trim();
+    // 整条规则就是「拼串步骤」时（`tpl:https://…/{{bookId}}`、`prefix:…`），
+    // 没有取值原语：从空串开始，先跑这一段再串后面的步骤。
+    final builderOnly = _isBuilderStep(head);
+    if (builderOnly && trimmed.contains('{{value}}')) {
+      // 典型误写：`tpl:https://x/{{bookId}}-{{value}}/` 少了取值原语，
+      // {{value}} 会被替换成空串，所有章节地址都变成同一个残址。
+      throw BookSourceException(
+        '规则里用了 {{value}}，但前面没有取值原语：先写 json:id / css:… 再 |> tpl:…',
+      );
+    }
+    var current = '';
+    if (!builderOnly) {
+      final first = _primitive(head, root);
+      if (first == null) return null;
+      current = first;
+    }
+    final steps = builderOnly ? pipeline : pipeline.skip(1);
+    for (final step in steps) {
       final next = _applyStep(current, step.trim());
       if (next == null) return null;
       current = next;
@@ -129,6 +144,12 @@ class BookSourceRuleEvaluator {
     final result = current.trim();
     return result.isEmpty ? null : result;
   }
+
+  /// `tpl:` / `prefix:` / `suffix:` 既可以当步骤，也可以单独成一条规则。
+  static bool _isBuilderStep(String rule) =>
+      rule.startsWith('tpl:') ||
+      rule.startsWith('prefix:') ||
+      rule.startsWith('suffix:');
 
   /// 取元素列表，列表规则（搜索结果、目录）用这个。
   ///
@@ -196,6 +217,9 @@ class BookSourceRuleEvaluator {
       throw BookSourceException('CSS 选择器写错了：$selector');
     } on FormatException {
       throw BookSourceException('CSS 选择器写错了：$selector');
+    } on UnimplementedError {
+      // csslib 对伪类/伪元素支持不全（例如把 URL 当成选择器时会报 `:https`）。
+      throw BookSourceException('CSS 选择器不受支持：$selector');
     }
     return const [];
   }
