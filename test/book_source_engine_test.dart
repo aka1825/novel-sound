@@ -173,6 +173,24 @@ void main() {
       expect(evaluator.text(r'AbC-123', r'regex:(\w+-\d+)|>upper'), 'ABC-123');
     });
 
+    test('prefix / suffix / tpl 拼地址', () {
+      final evaluator = BookSourceRuleEvaluator(
+        baseUrl: Uri.parse('https://api.test/x'),
+        vars: const {'bookId': '10007988'},
+      );
+      expect(
+        evaluator.text(r'42', r'regex:(\d+)|>prefix:id-|>suffix:/end'),
+        'id-42/end',
+      );
+      expect(
+        evaluator.text(
+          r'17697840140001',
+          r'regex:(\d+)|>tpl:https://www.site.test/shuku/{{bookId}}-{{value}}/',
+        ),
+        'https://www.site.test/shuku/10007988-17697840140001/',
+      );
+    });
+
     test('regex 取第一个非空分组', () {
       final evaluator = BookSourceRuleEvaluator(
         baseUrl: Uri.parse('https://site.test/search'),
@@ -499,6 +517,100 @@ void main() {
         store.importJson('[{"name":"缺地址"}]'),
         throwsA(isA<FormatException>()),
       );
+    });
+  });
+
+  group('接口型书源（七猫式：JSON 搜索/目录 + HTML 正文）', () {
+    const searchJson = '''
+{"data":{"search_list":[
+  {"book_id":"10007988","title":"斗破：破晓","author":"天蚕土豆",
+   "image_link":"https://cdn.wtzw.com/cover/1.png","intro":"斗气大陆的故事",
+   "read_url":"https://www.qimao.test/shuku/10007988/"}
+]}}''';
+
+    const tocJson = '''
+{"data":{"chapters":[
+  {"id":"17697840140001","title":"第1章 穿越者之一","index":"1"},
+  {"id":"17697840140002","title":"第2章 系统的声音","index":"2"}
+]}}''';
+
+    const bookHtml = '''
+<html><body>
+<div class="book-information-txt">
+  <span class="s-title">斗破：破晓</span>
+  <div class="txt"><span class="s-des">作者：天蚕土豆</span></div>
+</div>
+</body></html>''';
+
+    const chapterHtml = '''
+<html><body>
+<div class="chapter-detail-article"><div class="article">
+  <p>第一段：我叫萧炎。</p><p>第二段：斗气大陆。</p>
+</div></div>
+</body></html>''';
+
+    test('搜索 → 详情 → 目录 → 正文全链路', () async {
+      final client = _FakeClient({
+        'https://api.test/api/search/result?keyword=%E6%96%97%E7%A0%B4&page=1&pageSize=20':
+            searchJson,
+        'https://www.qimao.test/shuku/10007988/': bookHtml,
+        'https://api.test/api/book/chapter-list?book_id=10007988': tocJson,
+        'https://www.qimao.test/shuku/10007988-17697840140001/': chapterHtml,
+      });
+      final source = BookSource(
+        id: 'src_qimao',
+        name: '七猫小说',
+        baseUrl: 'https://api.test',
+        searchUrl: '/api/search/result?keyword={{key}}&page=1&pageSize=20',
+        rules: const BookSourceRules(
+          searchList: 'json:data.search_list',
+          searchName: 'json:title',
+          searchAuthor: 'json:author',
+          searchCover: 'json:image_link',
+          searchIntro: 'json:intro',
+          searchBookUrl: 'json:read_url',
+          detailName: 'css:.book-information-txt .s-title',
+          detailTocUrl:
+              'tpl:https://api.test/api/book/chapter-list?book_id={{bookId}}',
+          tocList: 'json:data.chapters',
+          tocName: 'json:title',
+          tocUrl: 'tpl:https://www.qimao.test/shuku/{{bookId}}-{{value}}/',
+          content: 'css:.chapter-detail-article .article',
+        ),
+      );
+      final engine = BookSourceEngine(client: client);
+
+      final items = await engine.search(source, '斗破');
+      expect(items.length, 1);
+      expect(items.first.name, '斗破：破晓');
+      expect(items.first.bookUrl, 'https://www.qimao.test/shuku/10007988/');
+
+      final book = await engine.book(source, items.first);
+      expect(book.name, '斗破：破晓');
+      expect(
+        book.tocUrl,
+        'https://api.test/api/book/chapter-list?book_id=10007988',
+      );
+
+      final chapters = await engine.chapters(source, book);
+      expect(chapters.length, 2);
+      expect(
+        chapters.first.url,
+        'https://www.qimao.test/shuku/10007988-17697840140001/',
+      );
+
+      final text = await engine.content(source, chapters.first);
+      expect(text, contains('萧炎'));
+      expect(text, contains('斗气大陆'));
+      engine.dispose();
+    });
+
+    test('bookIdFrom 从书籍地址里抠书号', () {
+      expect(
+        BookSourceEngine.bookIdFrom('https://www.qimao.test/shuku/10007988/'),
+        '10007988',
+      );
+      expect(BookSourceEngine.bookIdFrom('https://x.test/a/1/b'), '');
     });
   });
 }

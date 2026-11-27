@@ -103,12 +103,15 @@ const Set<String> _blockTags = {
 ///
 /// [baseUrl] 是当前页面的地址，`abs` 步骤和相对链接补全都以它为基准。
 class BookSourceRuleEvaluator {
-  const BookSourceRuleEvaluator({this.baseUrl});
+  const BookSourceRuleEvaluator({this.baseUrl, this.vars = const {}});
 
   final Uri? baseUrl;
 
+  /// 规则模板里可用的额外变量（目前由引擎注入 `bookId`）。
+  final Map<String, String> vars;
+
   BookSourceRuleEvaluator withBaseUrl(Uri url) =>
-      BookSourceRuleEvaluator(baseUrl: url);
+      BookSourceRuleEvaluator(baseUrl: url, vars: vars);
 
   /// 取单值。取不到或取到空串都返回 null，方便调用方写 `?? 兜底`。
   String? text(Object root, String rule) {
@@ -218,6 +221,16 @@ class BookSourceRuleEvaluator {
   }
 
   String? _applyStep(String value, String step) {
+    // 带参数的步骤先看前缀：它们是 URL 拼装的关键（章节地址常常要拿 id 拼）。
+    if (step.startsWith('prefix:')) return step.substring(7) + value;
+    if (step.startsWith('suffix:')) return value + step.substring(7);
+    if (step.startsWith('tpl:')) {
+      var out = step.substring(4).replaceAll('{{value}}', value);
+      vars.forEach((name, replacement) {
+        out = out.replaceAll('{{$name}}', replacement);
+      });
+      return out;
+    }
     switch (step) {
       case 'trim':
       case 'text':
@@ -342,8 +355,21 @@ class BookSourceEngine {
   /// 页面缓存条数上限。
   final int cacheSize;
 
-  BookSourceRuleEvaluator evaluatorFor(Uri url) =>
-      BookSourceRuleEvaluator(baseUrl: url);
+  BookSourceRuleEvaluator evaluatorFor(
+    Uri url, {
+    Map<String, String> vars = const {},
+  }) => BookSourceRuleEvaluator(baseUrl: url, vars: vars);
+
+  /// 从书籍地址里取书号（第一段 3 位以上的数字）。
+  ///
+  /// 章节地址常常是 `/<书号>-<章节号>/` 这种形状，而目录接口只给章节号，
+  /// 所以规则里的 `{{bookId}}` 需要引擎把书号从 bookUrl 里抠出来。
+  static String bookIdFrom(String url) {
+    final uri = Uri.tryParse(url);
+    final path = uri?.path ?? url;
+    final match = RegExp(r'(\d{3,})').firstMatch(path);
+    return match?.group(1) ?? '';
+  }
 
   /// 抓一个地址。返回的 [BookSourcePage.url] 是跟过重定向之后的最终地址。
   Future<BookSourcePage> get(
@@ -518,7 +544,10 @@ class BookSourceEngine {
       source: source,
       useCache: !reload,
     );
-    final evaluator = evaluatorFor(page.url);
+    final evaluator = evaluatorFor(
+      page.url,
+      vars: {'bookId': bookIdFrom(page.url.toString())},
+    );
     final rules = source.rules;
     final tocUrl =
         absoluteUrl(evaluator.text(page.root, rules.detailTocUrl), page.url) ??
@@ -549,7 +578,10 @@ class BookSourceEngine {
       referer: Uri.tryParse(book.bookUrl),
       useCache: !reload,
     );
-    final evaluator = evaluatorFor(page.url);
+    final evaluator = evaluatorFor(
+      page.url,
+      vars: {'bookId': bookIdFrom(book.bookUrl)},
+    );
     final rules = source.rules;
     final nodes = evaluator.elements(page.root, rules.tocList);
     final chapters = <BookSourceChapter>[];
