@@ -115,13 +115,15 @@ class BookSourceRuleEvaluator {
     final trimmed = rule.trim();
     if (trimmed.isEmpty) return null;
     final pipeline = trimmed.split('|>');
-    var value = _primitive(pipeline.first.trim(), root);
-    if (value == null) return null;
+    final first = _primitive(pipeline.first.trim(), root);
+    if (first == null) return null;
+    var current = first;
     for (final step in pipeline.skip(1)) {
-      value = _applyStep(value, step.trim());
-      if (value == null) return null;
+      final next = _applyStep(current, step.trim());
+      if (next == null) return null;
+      current = next;
     }
-    final result = value.trim();
+    final result = current.trim();
     return result.isEmpty ? null : result;
   }
 
@@ -136,10 +138,11 @@ class BookSourceRuleEvaluator {
     if (trimmed.startsWith('json:')) {
       final value = _jsonPath(trimmed.substring('json:'.length).trim(), root);
       if (value is List) {
-        return [
-          for (final item in value)
-            if (item != null) item,
-        ];
+        final items = <Object>[];
+        for (final item in value) {
+          if (item != null) items.add(item);
+        }
+        return items;
       }
       return value == null ? const [] : [value];
     }
@@ -207,8 +210,9 @@ class BookSourceRuleEvaluator {
     final key = attribute.toLowerCase();
     final direct = element.attributes[key];
     if (direct != null) return direct;
+    // html 包的 attributes 是 LinkedHashMap<Object, String>，键不一定是 String。
     for (final entry in element.attributes.entries) {
-      if (entry.key.toLowerCase() == key) return entry.value;
+      if (entry.key.toString().toLowerCase() == key) return entry.value;
     }
     return null;
   }
@@ -323,17 +327,18 @@ String normalizeChapterContent(String raw) {
 /// [client] 可注入，单测里用假的 [http.Client] 或本地桩页面；
 /// 引擎内部对同一 URL 有一次内存缓存，翻回上一章不会重新抓。
 class BookSourceEngine {
-  BookSourceEngine({http.Client? client, int cacheSize = 24})
+  BookSourceEngine({http.Client? client, this.cacheSize = 24})
     : _client = client ?? http.Client(),
-      _cache = LinkedHashMap<String, BookSourcePage>(),
-      _cacheSize = cacheSize;
+      _cache = LinkedHashMap<String, BookSourcePage>();
 
   static const Duration defaultTimeout = Duration(seconds: 20);
   static const int maxBodyBytes = 4 * 1024 * 1024;
 
   final http.Client _client;
   final LinkedHashMap<String, BookSourcePage> _cache;
-  final int _cacheSize;
+
+  /// 页面缓存条数上限。
+  final int cacheSize;
 
   BookSourceRuleEvaluator evaluatorFor(Uri url) =>
       BookSourceRuleEvaluator(baseUrl: url);
@@ -393,7 +398,7 @@ class BookSourceEngine {
     if (useCache) {
       _cache[page.url.toString()] = page;
       _cache[key] = page;
-      while (_cache.length > _cacheSize) {
+      while (_cache.length > cacheSize) {
         _cache.remove(_cache.keys.first);
       }
     }
