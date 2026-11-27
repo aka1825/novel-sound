@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fqapp/models/book_source.dart';
 import 'package:fqapp/services/book_source_engine.dart';
 import 'package:fqapp/services/book_source_store.dart';
+import 'package:fqapp/services/gbk_codec.dart';
 
 const String _searchHtml = '''
 <html><body>
@@ -424,6 +425,44 @@ void main() {
         ),
       );
       engine.dispose();
+    });
+  });
+
+  group('GBK 搜索词编码（老 CMS 的 accept-charset=GBK）', () {
+    test('中文按 GBK 百分号编码', () {
+      // 期望值来自 Python：urllib.parse.quote('林氏家族'.encode('gbk'))
+      expect(encodeGbkQueryComponent('林氏家族'), '%C1%D6%CA%CF%BC%D2%D7%E5');
+      expect(encodeGbkQueryComponent('剑来'), '%BD%A3%C0%B4');
+      expect(encodeGbk('林氏家族')?.length, 8);
+    });
+
+    test('ASCII 原样、空格转加号', () {
+      expect(encodeGbkQueryComponent('abc123'), 'abc123');
+      expect(encodeGbkQueryComponent('a b'), 'a+b');
+    });
+
+    test('queryEncoding=gbk 时搜索地址用 GBK 编码', () {
+      final source = BookSource(
+        id: 'x',
+        name: '第一版主',
+        baseUrl: 'https://www.diyibanzhu.test',
+        searchUrl: '/wap.php?action=search&wd={{key}}&objectType=2',
+        queryEncoding: queryEncodingGbk,
+        rules: BookSourceRules.empty,
+      );
+      final uri = BookSourceEngine.buildUri(source.searchUrl, source, {
+        'key': '林氏家族',
+        'page': '1',
+      });
+      expect(uri.toString(), contains('wd=%C1%D6%CA%CF%BC%D2%D7%E5'));
+
+      final utf8Source = source.copyWith(queryEncoding: queryEncodingUtf8);
+      final utf8Uri = BookSourceEngine.buildUri(
+        utf8Source.searchUrl,
+        utf8Source,
+        {'key': '林氏家族', 'page': '1'},
+      );
+      expect(utf8Uri.toString(), isNot(contains('%C1%D6')));
     });
   });
 

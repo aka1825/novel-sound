@@ -38,6 +38,7 @@ class _BookSourceEditorPageState extends State<BookSourceEditorPage> {
   late final TextEditingController _name;
   late final TextEditingController _baseUrl;
   late final TextEditingController _searchUrl;
+  late final TextEditingController _encoding;
   late final TextEditingController _headers;
   final Map<String, TextEditingController> _rules = {};
   final _testKeyword = TextEditingController();
@@ -96,6 +97,9 @@ class _BookSourceEditorPageState extends State<BookSourceEditorPage> {
     _searchUrl = TextEditingController(
       text: source?.searchUrl ?? '/search.php?q={{key}}',
     );
+    _encoding = TextEditingController(
+      text: source?.queryEncoding ?? queryEncodingUtf8,
+    );
     _headers = TextEditingController(
       text: source == null
           ? ''
@@ -118,6 +122,7 @@ class _BookSourceEditorPageState extends State<BookSourceEditorPage> {
     _name.dispose();
     _baseUrl.dispose();
     _searchUrl.dispose();
+    _encoding.dispose();
     _headers.dispose();
     _testKeyword.dispose();
     for (final controller in _rules.values) {
@@ -178,6 +183,7 @@ class _BookSourceEditorPageState extends State<BookSourceEditorPage> {
       name: _name.text.trim(),
       baseUrl: _baseUrl.text.trim(),
       searchUrl: _searchUrl.text.trim(),
+      queryEncoding: normalizeQueryEncoding(_encoding.text),
       enabled: widget.source?.enabled ?? true,
       headers: parseHeaderText(_headers.text),
       rules: rules,
@@ -306,6 +312,12 @@ class _BookSourceEditorPageState extends State<BookSourceEditorPage> {
             controller: _searchUrl,
             label: '搜索地址',
             help: '例如 /search.php?q={{key}}&page={{page}}；/ 开头会按站点地址补全',
+          ),
+          _field(
+            key: 'book-source-encoding',
+            controller: _encoding,
+            label: '搜索词编码',
+            help: 'utf-8（默认）或 gbk：站点表单 accept-charset=GBK 时填 gbk',
           ),
         ],
       ),

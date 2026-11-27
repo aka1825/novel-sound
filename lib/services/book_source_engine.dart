@@ -17,6 +17,7 @@ import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
 
 import '../models/book_source.dart';
+import 'gbk_codec.dart';
 
 /// 书源链路上的可展示错误。文案直接进 UI，不带原始响应体与签名地址。
 class BookSourceException implements Exception {
@@ -658,8 +659,14 @@ class BookSourceEngine {
       throw BookSourceException('「${source.name}」没有配置搜索地址');
     }
     var text = trimmed.replaceAll('{{baseUrl}}', source.baseUrl.trim());
+    final gbkQuery = source.queryEncoding == queryEncodingGbk;
     variables.forEach((name, value) {
-      text = text.replaceAll('{{$name}}', Uri.encodeQueryComponent(value));
+      // 老 CMS 的表单是 accept-charset=GBK：关键字得按 GBK 编码提交，
+      // 否则服务端按 GBK 解码 UTF-8 字节，永远查不到结果。
+      final encoded = name == 'key' && gbkQuery
+          ? encodeGbkQueryComponent(value)
+          : Uri.encodeQueryComponent(value);
+      text = text.replaceAll('{{$name}}', encoded);
     });
     final base = Uri.tryParse(source.baseUrl.trim());
     if (base == null) {

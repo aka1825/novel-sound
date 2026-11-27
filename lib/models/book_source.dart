@@ -26,6 +26,16 @@ library;
 /// 书源存储格式版本。改结构时递增，[BookSourceStore] 会跳过读不懂的旧数据。
 const int bookSourceSchemaVersion = 1;
 
+/// 搜索关键字可用的编码。`gbk` 用于「页面 UTF-8、但表单 accept-charset=GBK」的老 CMS。
+const String queryEncodingUtf8 = 'utf-8';
+const String queryEncodingGbk = 'gbk';
+
+/// 把任意输入归一成受支持的编码名；不认识的一律按 UTF-8 处理。
+String normalizeQueryEncoding(Object? value) {
+  final text = value is String ? value.trim().toLowerCase() : '';
+  return text == queryEncodingGbk ? queryEncodingGbk : queryEncodingUtf8;
+}
+
 /// 单个书源可配置的规则集合。
 ///
 /// 字段分成四组，对应书本流转的四个页面；留空的规则表示「沿用上一层的值」
@@ -180,6 +190,7 @@ class BookSource {
     required this.name,
     required this.baseUrl,
     this.searchUrl = '',
+    this.queryEncoding = 'utf-8',
     this.rules = BookSourceRules.empty,
     this.enabled = true,
     this.headers = const {},
@@ -195,6 +206,12 @@ class BookSource {
 
   /// 搜索地址模板，例如 `/search.php?q={{key}}&page={{page}}`。
   final String searchUrl;
+
+  /// 搜索关键字用的编码：`utf-8`（默认）或 `gbk`。
+  ///
+  /// 老 CMS（第一版主这类）的表单是 `accept-charset="GBK"`，关键字必须按 GBK
+  /// 提交才查得到；页面本身通常仍是 UTF-8。
+  final String queryEncoding;
 
   final BookSourceRules rules;
 
@@ -214,6 +231,7 @@ class BookSource {
     String? name,
     String? baseUrl,
     String? searchUrl,
+    String? queryEncoding,
     BookSourceRules? rules,
     bool? enabled,
     Map<String, String>? headers,
@@ -222,6 +240,7 @@ class BookSource {
     name: name ?? this.name,
     baseUrl: baseUrl ?? this.baseUrl,
     searchUrl: searchUrl ?? this.searchUrl,
+    queryEncoding: queryEncoding ?? this.queryEncoding,
     rules: rules ?? this.rules,
     enabled: enabled ?? this.enabled,
     headers: headers ?? this.headers,
@@ -232,6 +251,7 @@ class BookSource {
     'name': name,
     'baseUrl': baseUrl,
     'searchUrl': searchUrl,
+    'queryEncoding': queryEncoding,
     'enabled': enabled,
     'headers': headers,
     'rules': rules.toJson(),
@@ -244,6 +264,7 @@ class BookSource {
       name: _string(json['name']),
       baseUrl: _string(json['baseUrl']),
       searchUrl: _string(json['searchUrl']),
+      queryEncoding: normalizeQueryEncoding(json['queryEncoding']),
       enabled: json['enabled'] is bool ? json['enabled'] as bool : true,
       headers: _headers(json['headers']),
       rules: rules is Map
@@ -263,6 +284,9 @@ class BookSource {
       return '站点地址必须是 http(s):// 开头的完整地址';
     }
     if (searchUrl.trim().isEmpty) return '搜索地址不能为空';
+    if (normalizeQueryEncoding(queryEncoding) != queryEncoding) {
+      return '搜索词编码只能是 utf-8 或 gbk';
+    }
     if (rules.searchList.trim().isEmpty) return '搜索结果列表规则不能为空';
     if (rules.searchName.trim().isEmpty) return '搜索结果书名规则不能为空';
     if (rules.searchBookUrl.trim().isEmpty) return '详情页地址规则不能为空';
