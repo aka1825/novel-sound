@@ -89,12 +89,12 @@ json:data.list[0].title     JSON 接口的书名
 
 ## 一个能直接导入的示例
 
-下面这条是**实测通过**的七猫小说书源（接口型：搜索/目录走 JSON 接口，正文走章节页 HTML）：
+下面这条是**实测通过**的猫小说书源（接口型：搜索/目录走 JSON 接口，正文走章节页 HTML）：
 
 ```json
 {
   "id": "src_qimao",
-  "name": "七猫小说",
+  "name": "猫小说",
   "baseUrl": "https://api-www.qimao.com",
   "searchUrl": "/api/search/result?keyword={{key}}&page=1&pageSize=20",
   "enabled": true,
