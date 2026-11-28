@@ -6,6 +6,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -103,6 +104,26 @@ BookSourceRules _htmlRules() => const BookSourceRules(
   tocUrl: 'css:a@href|>abs',
   content: 'css:#content',
 );
+
+class _RecordingClient extends http.BaseClient {
+  _RecordingClient(this.requests, this.bodies, this.body);
+
+  final List<http.BaseRequest> requests;
+  final List<String> bodies;
+  final String body;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    requests.add(request);
+    if (request is http.Request) bodies.add(request.body);
+    return http.StreamedResponse(
+      Stream.value(utf8.encode(body)),
+      200,
+      headers: {'content-type': 'text/html; charset=utf-8'},
+      request: request,
+    );
+  }
+}
 
 class _FakeClient extends http.BaseClient {
   _FakeClient(this.pages, {this.headers = const {}});
@@ -463,6 +484,111 @@ void main() {
         {'key': '林氏家族', 'page': '1'},
       );
       expect(utf8Uri.toString(), isNot(contains('%C1%D6')));
+    });
+  });
+
+  group('POST 搜索与 GBK 解码', () {
+    test('buildFormBody 拼表单体，gbk 时关键字按 GBK 编码', () {
+      final gbk = BookSource(
+        id: 'x',
+        name: 'wenku8',
+        baseUrl: 'https://www.wenku8.test',
+        searchUrl: '/so.php',
+        searchMethod: 'post',
+        searchBody: 'searchtype=articlename&searchkey={{key}}&charset=gbk',
+        queryEncoding: queryEncodingGbk,
+        rules: BookSourceRules.empty,
+      );
+      expect(
+        BookSourceEngine.buildFormBody(gbk.searchBody, gbk, {'key': '剑来'}),
+        'searchtype=articlename&searchkey=%BD%A3%C0%B4&charset=gbk',
+      );
+      final utf8Source = gbk.copyWith(queryEncoding: queryEncodingUtf8);
+      expect(
+        BookSourceEngine.buildFormBody(utf8Source.searchBody, utf8Source, {
+          'key': '剑来',
+        }),
+        contains('searchkey=%E5%89%91%E6%9D%A5'),
+      );
+    });
+
+    test('POST 搜索会带表单体，GET 不会', () async {
+      final requests = <http.BaseRequest>[];
+      final bodies = <String>[];
+      final client = _RecordingClient(
+        requests,
+        bodies,
+        '<html><body><div class="row"><a href="/book/1/">斗破</a></div></body></html>',
+      );
+      final engine = BookSourceEngine(client: client);
+      final rules = const BookSourceRules(
+        searchList: 'css:.row',
+        searchName: 'css:a',
+        searchBookUrl: 'css:a@href|>abs',
+      );
+      final postSource = BookSource(
+        id: 'p',
+        name: 'POST 源',
+        baseUrl: 'https://site.test',
+        searchUrl: '/search.html',
+        searchMethod: 'post',
+        searchBody: 's={{key}}',
+        rules: rules,
+      );
+      final items = await engine.search(postSource, '斗破');
+      expect(items, hasLength(1));
+      expect(requests.single.method, 'POST');
+      expect(bodies.single, contains('s=%E6%96%97%E7%A0%B4'));
+
+      requests.clear();
+      bodies.clear();
+      final getSource = postSource.copyWith(searchMethod: 'get');
+      await engine.search(getSource, '斗破');
+      expect(requests.single.method, 'GET');
+      expect(bodies, isEmpty);
+      engine.dispose();
+    });
+
+    test('GBK 页面按 GBK 解码，UTF-8 页面照常', () {
+      final source = BookSource(
+        id: 'x',
+        name: 'wenku8',
+        baseUrl: 'https://www.wenku8.test',
+        searchUrl: '/so.php',
+        rules: BookSourceRules.empty,
+      );
+      // “剑来”的 GBK 字节
+      final gbkBytes = <int>[0xBD, 0xA3, 0xC0, 0xB4];
+      expect(
+        BookSourceEngine.decodePageBytes(gbkBytes, {
+          'content-type': 'text/html; charset=gbk',
+        }, source),
+        '剑来',
+      );
+      expect(
+        BookSourceEngine.decodePageBytes(utf8.encode('剑来'), {
+          'content-type': 'text/html; charset=utf-8',
+        }, source),
+        '剑来',
+      );
+      expect(
+        () => BookSourceEngine.decodePageBytes(gbkBytes, {
+          'content-type': 'text/html; charset=big5',
+        }, source),
+        throwsA(isA<BookSourceException>()),
+      );
+    });
+
+    test('b64 步骤解码脚本里的 base64 并拼段', () {
+      final evaluator = BookSourceRuleEvaluator(
+        baseUrl: Uri.parse('https://site.test/book/1/2.html'),
+      );
+      // 两段 base64（分别解码成 <p>甲</p> 与 <p>乙</p>）
+      final page = html_parser.parse(
+        '<html><body><div id="c"><script>document.writeln(qsbs.bb(\'PHA+55SyPC9wPg==\'));</script>'
+        '<script>document.writeln(qsbs.bb(\'PHA+5LmZPC9wPg==\'));</script></div></body></html>',
+      );
+      expect(evaluator.text(page, 'css:#c@html|>b64'), '甲\n乙');
     });
   });
 

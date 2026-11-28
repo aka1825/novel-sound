@@ -30,6 +30,12 @@ const int bookSourceSchemaVersion = 1;
 const String queryEncodingUtf8 = 'utf-8';
 const String queryEncodingGbk = 'gbk';
 
+/// 把任意输入归一成受支持的搜索方法；只认 `post`，其余按 `get` 处理。
+String normalizeSearchMethod(Object? value) {
+  final text = value is String ? value.trim().toLowerCase() : '';
+  return text == 'post' ? 'post' : 'get';
+}
+
 /// 把任意输入归一成受支持的编码名；不认识的一律按 UTF-8 处理。
 String normalizeQueryEncoding(Object? value) {
   final text = value is String ? value.trim().toLowerCase() : '';
@@ -191,6 +197,8 @@ class BookSource {
     required this.baseUrl,
     this.searchUrl = '',
     this.queryEncoding = 'utf-8',
+    this.searchMethod = 'get',
+    this.searchBody = '',
     this.rules = BookSourceRules.empty,
     this.enabled = true,
     this.headers = const {},
@@ -213,6 +221,15 @@ class BookSource {
   /// 提交才查得到；页面本身通常仍是 UTF-8。
   final String queryEncoding;
 
+  /// 搜索请求方法：`get`（默认）或 `post`。
+  ///
+  /// 很多笔趣阁系站点的搜索表单是 POST（GET 只会回一张推荐列表），
+  /// 这时把 [searchBody] 写成表单模板，例如 `s={{key}}`。
+  final String searchMethod;
+
+  /// POST 搜索的表单模板（`a=1&b={{key}}`）。GET 时忽略。
+  final String searchBody;
+
   final BookSourceRules rules;
 
   final bool enabled;
@@ -232,6 +249,8 @@ class BookSource {
     String? baseUrl,
     String? searchUrl,
     String? queryEncoding,
+    String? searchMethod,
+    String? searchBody,
     BookSourceRules? rules,
     bool? enabled,
     Map<String, String>? headers,
@@ -241,6 +260,8 @@ class BookSource {
     baseUrl: baseUrl ?? this.baseUrl,
     searchUrl: searchUrl ?? this.searchUrl,
     queryEncoding: queryEncoding ?? this.queryEncoding,
+    searchMethod: searchMethod ?? this.searchMethod,
+    searchBody: searchBody ?? this.searchBody,
     rules: rules ?? this.rules,
     enabled: enabled ?? this.enabled,
     headers: headers ?? this.headers,
@@ -252,6 +273,8 @@ class BookSource {
     'baseUrl': baseUrl,
     'searchUrl': searchUrl,
     'queryEncoding': queryEncoding,
+    'searchMethod': searchMethod,
+    'searchBody': searchBody,
     'enabled': enabled,
     'headers': headers,
     'rules': rules.toJson(),
@@ -265,6 +288,8 @@ class BookSource {
       baseUrl: _string(json['baseUrl']),
       searchUrl: _string(json['searchUrl']),
       queryEncoding: normalizeQueryEncoding(json['queryEncoding']),
+      searchMethod: normalizeSearchMethod(json['searchMethod']),
+      searchBody: _string(json['searchBody']),
       enabled: json['enabled'] is bool ? json['enabled'] as bool : true,
       headers: _headers(json['headers']),
       rules: rules is Map
@@ -286,6 +311,12 @@ class BookSource {
     if (searchUrl.trim().isEmpty) return '搜索地址不能为空';
     if (normalizeQueryEncoding(queryEncoding) != queryEncoding) {
       return '搜索词编码只能是 utf-8 或 gbk';
+    }
+    if (normalizeSearchMethod(searchMethod) != searchMethod) {
+      return '搜索方法只能是 get 或 post';
+    }
+    if (searchMethod == 'post' && searchBody.trim().isEmpty) {
+      return 'POST 搜索需要填写表单模板，例如 s={{key}}';
     }
     if (rules.searchList.trim().isEmpty) return '搜索结果列表规则不能为空';
     if (rules.searchName.trim().isEmpty) return '搜索结果书名规则不能为空';

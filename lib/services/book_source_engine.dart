@@ -200,6 +200,13 @@ class BookSourceRuleEvaluator {
     if (base.startsWith('json:')) {
       return _jsonText(_jsonPath(base.substring('json:'.length).trim(), root));
     }
+    // 裸 `@href` / `@text`：直接作用在当前节点上。
+    // 目录列表常常直接选中 <a> 本身，这时没有选择器可写。
+    if (base.startsWith('@')) {
+      final element = root;
+      if (element is! dom.Element) return null;
+      return _valueOf(element, base.substring(1).trim());
+    }
     final body = base.startsWith('css:')
         ? base.substring('css:'.length).trim()
         : base;
@@ -255,6 +262,16 @@ class BookSourceRuleEvaluator {
         out = out.replaceAll('{{$name}}', replacement);
       });
       return out;
+    }
+    if (step == 'b64') {
+      // 42zw 这类站把正文切成几十段塞进 `document.writeln(qsbs.bb('...'))`：
+      // 要把所有引号里的 base64 依次解码拼起来，再按 HTML 取内文。
+      final decoded = _decodeBase64Chunks(value);
+      if (decoded == null) return null;
+      if (decoded.contains('<')) {
+        return innerText(html_parser.parseFragment(decoded));
+      }
+      return decoded;
     }
     switch (step) {
       case 'trim':
@@ -397,16 +414,19 @@ class BookSourceEngine {
   }
 
   /// 抓一个地址。返回的 [BookSourcePage.url] 是跟过重定向之后的最终地址。
+  ///
+  /// [formBody] 非空时改用 POST（wenku8 这类站的搜索是表单提交）。
   Future<BookSourcePage> get(
     Uri url, {
     required BookSource source,
     Uri? referer,
     bool useCache = true,
+    String? formBody,
   }) async {
     if (url.scheme != 'http' && url.scheme != 'https') {
       throw BookSourceException('只支持 http/https 地址：$url');
     }
-    final key = url.toString();
+    final key = formBody == null ? url.toString() : '$url#post:$formBody';
     if (useCache) {
       final cached = _cache.remove(key);
       if (cached != null) {
@@ -424,9 +444,22 @@ class BookSourceEngine {
     };
     final http.Response response;
     try {
-      response = await _client
-          .get(url, headers: headers)
-          .timeout(defaultTimeout);
+      if (formBody == null) {
+        response = await _client
+            .get(url, headers: headers)
+            .timeout(defaultTimeout);
+      } else {
+        response = await _client
+            .post(
+              url,
+              headers: {
+                ...headers,
+                'content-type': 'application/x-www-form-urlencoded',
+              },
+              body: formBody,
+            )
+            .timeout(defaultTimeout);
+      }
     } on TimeoutException {
       throw BookSourceException('「${source.name}」请求超时');
     } on http.ClientException {
@@ -443,10 +476,9 @@ class BookSourceEngine {
     if (bytes.length > maxBodyBytes) {
       throw BookSourceException('「${source.name}」页面超过 4MB，已跳过');
     }
-    _assertUtf8(bytes, response.headers, source);
     final page = BookSourcePage(
       url: response.request?.url ?? url,
-      body: utf8.decode(bytes, allowMalformed: true),
+      body: decodePageBytes(bytes, response.headers, source),
     );
     if (useCache) {
       _cache[page.url.toString()] = page;
@@ -458,7 +490,10 @@ class BookSourceEngine {
     return page;
   }
 
-  static void _assertUtf8(
+  /// 按页面声明的编码解码：UTF-8 / GBK（GB2312、GB18030 走同一张表）。
+  ///
+  /// Big5 仍然明确报错——没有对应码表，宁可说清楚也不吐乱码。
+  static String decodePageBytes(
     List<int> bytes,
     Map<String, String> headers,
     BookSource source,
@@ -470,22 +505,23 @@ class BookSourceEngine {
       caseSensitive: false,
     ).firstMatch(contentType);
     if (headerMatch != null) declared.add(headerMatch.group(1)!.toLowerCase());
+    // meta 前缀按 latin1 读，避免用错误的编码去猜编码。
     final probe = String.fromCharCodes(bytes.take(2048)).toLowerCase();
     final metaMatch = RegExp(
       r'''charset\s*=\s*["']?\s*([\w-]+)''',
       caseSensitive: false,
     ).firstMatch(probe);
     if (metaMatch != null) declared.add(metaMatch.group(1)!.toLowerCase());
-    final gbk = declared.any(
-      (value) =>
-          value == 'gbk' ||
-          value == 'gb2312' ||
-          value == 'gb18030' ||
-          value == 'big5',
-    );
-    if (gbk) {
-      throw BookSourceException('「${source.name}」是 GBK/Big5 编码站点，当前只支持 UTF-8');
+
+    if (declared.any(
+      (value) => value == 'gbk' || value == 'gb2312' || value == 'gb18030',
+    )) {
+      return decodeGbk(bytes);
     }
+    if (declared.any((value) => value == 'big5' || value == 'big5-hkscs')) {
+      throw BookSourceException('「${source.name}」是 Big5 编码站点，暂不支持');
+    }
+    return utf8.decode(bytes, allowMalformed: true);
   }
 
   /// 搜索。返回该书的引用列表，地址已补全成绝对地址。
@@ -495,11 +531,13 @@ class BookSourceEngine {
   ) async {
     final trimmed = keyword.trim();
     if (trimmed.isEmpty) return const [];
-    final uri = buildUri(source.searchUrl, source, {
-      'key': trimmed,
-      'page': '1',
-    });
-    final page = await get(uri, source: source);
+    final variables = {'key': trimmed, 'page': '1'};
+    final uri = buildUri(source.searchUrl, source, variables);
+    // POST 搜索（wenku8 的 /so.php、很多笔趣阁克隆）：地址照旧拼，参数走表单体。
+    final formBody = source.searchMethod == 'post'
+        ? buildFormBody(source.searchBody, source, variables)
+        : null;
+    final page = await get(uri, source: source, formBody: formBody);
     final evaluator = evaluatorFor(page.url);
     final nodes = evaluator.elements(page.root, source.rules.searchList);
     final items = <BookSourceSearchItem>[];
@@ -646,6 +684,29 @@ class BookSourceEngine {
     return text;
   }
 
+  /// 拼 POST 表单体（`s={{key}}&type=articlename` 这种模板）。
+  ///
+  /// 编码规则与 [buildUri] 一致：`queryEncoding=gbk` 时关键字按 GBK 百分号编码。
+  static String buildFormBody(
+    String template,
+    BookSource source,
+    Map<String, String> variables,
+  ) {
+    final trimmed = template.trim();
+    if (trimmed.isEmpty) {
+      throw BookSourceException('「${source.name}」是 POST 搜索，但没有配置表单模板');
+    }
+    var text = trimmed;
+    final gbkQuery = source.queryEncoding == queryEncodingGbk;
+    variables.forEach((name, value) {
+      final encoded = name == 'key' && gbkQuery
+          ? encodeGbkQueryComponent(value)
+          : Uri.encodeQueryComponent(value);
+      text = text.replaceAll('{{$name}}', encoded);
+    });
+    return text;
+  }
+
   /// 用模板拼出请求地址。
   ///
   /// 支持 `{{key}}`、`{{page}}`、`{{baseUrl}}`；`/` 开头的模板按站点地址补全。
@@ -742,4 +803,30 @@ String? _jsonText(Object? value) {
   if (value is String) return value;
   if (value is num || value is bool) return value.toString();
   return jsonEncode(value);
+}
+
+/// 把脚本片段里所有引号包裹的 base64 依次解码并拼接（正文常被切成几十段）。
+///
+/// 没有任何引号载荷时，把整串（去空白）当 base64 试一次。
+String? _decodeBase64Chunks(String value) {
+  final payloads = RegExp(
+    r"""['"]([A-Za-z0-9+/=]{16,})['"]""",
+  ).allMatches(value).map((match) => match.group(1)!).toList();
+  if (payloads.isEmpty) {
+    final trimmed = value.replaceAll(RegExp(r'\s+'), '');
+    if (trimmed.length >= 16 &&
+        RegExp(r'^[A-Za-z0-9+/=]+$').hasMatch(trimmed)) {
+      payloads.add(trimmed);
+    }
+  }
+  if (payloads.isEmpty) return null;
+  final buffer = StringBuffer();
+  for (final payload in payloads) {
+    try {
+      buffer.write(utf8.decode(base64Decode(payload), allowMalformed: true));
+    } on FormatException {
+      continue;
+    }
+  }
+  return buffer.isEmpty ? null : buffer.toString();
 }

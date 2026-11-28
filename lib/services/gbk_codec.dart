@@ -9,6 +9,7 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'gbk_decode_table.dart';
 import 'gbk_table.dart';
 
 Uint8List? _cachedTable;
@@ -17,6 +18,53 @@ Uint8List get _table {
   final cached = _cachedTable;
   if (cached != null) return cached;
   return _cachedTable = base64Decode(gbkCjkBase64);
+}
+
+Uint8List? _cachedDecodeTable;
+
+Uint8List get _decodeTable {
+  final cached = _cachedDecodeTable;
+  if (cached != null) return cached;
+  return _cachedDecodeTable = base64Decode(gbkDecodeBase64);
+}
+
+/// 把 GBK 字节解码成文本。
+///
+/// 单字节 0x00-0x7F 原样；双字节按 `(hi-0x81)*191 + (lo-0x40)` 查表；
+/// 查不到就输出 U+FFFD（不抛异常——正文里一个坏字节不该让整章失败）。
+String decodeGbk(List<int> bytes) {
+  final table = _decodeTable;
+  final out = StringBuffer();
+  var index = 0;
+  while (index < bytes.length) {
+    final byte = bytes[index];
+    if (byte < 0x80) {
+      out.writeCharCode(byte);
+      index += 1;
+      continue;
+    }
+    if (index + 1 >= bytes.length) {
+      out.writeCharCode(0xFFFD);
+      break;
+    }
+    final low = bytes[index + 1];
+    if (byte < gbkHiStart || low < gbkLoStart || low == 0x7F || low > 0xFE) {
+      out.writeCharCode(0xFFFD);
+      index += 1;
+      continue;
+    }
+    final slot = (byte - gbkHiStart) * gbkLoCount + (low - gbkLoStart);
+    final offset = slot * 2;
+    if (offset + 1 >= table.length) {
+      out.writeCharCode(0xFFFD);
+      index += 2;
+      continue;
+    }
+    final code = (table[offset] << 8) | table[offset + 1];
+    out.writeCharCode(code == 0 ? 0xFFFD : code);
+    index += 2;
+  }
+  return out.toString();
 }
 
 /// 把文本编码成 GBK 字节。遇到表里没有的字符返回 null（调用方回退 UTF-8）。

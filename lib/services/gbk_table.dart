@@ -1,12 +1,7 @@
-// 由 scripts 里的生成脚本产出：U+4E00..U+9FFF 的 GBK 双字节映射（base64）。
+// 由脚本生成：U+4E00..U+9FFF 的 GBK 双字节映射（base64，每码位 2 字节）。
 //
-// 每个码位占 2 字节，按码位顺序排列；未收录的码位是 0x00 0x00。
 // 只用于「把搜索关键字编码成 GBK」——第一版主这类老 CMS 的表单是
 // `accept-charset="GBK"`，UTF-8 提交一律查不到结果。
-//
-// 生成方式（Python）：
-//   for cp in range(0x4E00, 0xA000): chr(cp).encode("gbk")
-//   base64 后按 2 字节/码位拼起来。
 library;
 
 /// 表覆盖的起始码位。

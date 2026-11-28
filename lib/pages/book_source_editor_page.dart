@@ -39,6 +39,8 @@ class _BookSourceEditorPageState extends State<BookSourceEditorPage> {
   late final TextEditingController _baseUrl;
   late final TextEditingController _searchUrl;
   late final TextEditingController _encoding;
+  late final TextEditingController _method;
+  late final TextEditingController _body;
   late final TextEditingController _headers;
   final Map<String, TextEditingController> _rules = {};
   final _testKeyword = TextEditingController();
@@ -100,6 +102,8 @@ class _BookSourceEditorPageState extends State<BookSourceEditorPage> {
     _encoding = TextEditingController(
       text: source?.queryEncoding ?? queryEncodingUtf8,
     );
+    _method = TextEditingController(text: source?.searchMethod ?? 'get');
+    _body = TextEditingController(text: source?.searchBody ?? '');
     _headers = TextEditingController(
       text: source == null
           ? ''
@@ -123,6 +127,8 @@ class _BookSourceEditorPageState extends State<BookSourceEditorPage> {
     _baseUrl.dispose();
     _searchUrl.dispose();
     _encoding.dispose();
+    _method.dispose();
+    _body.dispose();
     _headers.dispose();
     _testKeyword.dispose();
     for (final controller in _rules.values) {
@@ -184,6 +190,8 @@ class _BookSourceEditorPageState extends State<BookSourceEditorPage> {
       baseUrl: _baseUrl.text.trim(),
       searchUrl: _searchUrl.text.trim(),
       queryEncoding: normalizeQueryEncoding(_encoding.text),
+      searchMethod: normalizeSearchMethod(_method.text),
+      searchBody: _body.text.trim(),
       enabled: widget.source?.enabled ?? true,
       headers: parseHeaderText(_headers.text),
       rules: rules,
@@ -318,6 +326,18 @@ class _BookSourceEditorPageState extends State<BookSourceEditorPage> {
             controller: _encoding,
             label: '搜索词编码',
             help: 'utf-8（默认）或 gbk：站点表单 accept-charset=GBK 时填 gbk',
+          ),
+          _field(
+            key: 'book-source-search-method',
+            controller: _method,
+            label: '搜索方法',
+            help: 'get（默认）或 post：站点用表单提交搜索时填 post',
+          ),
+          _field(
+            key: 'book-source-search-body',
+            controller: _body,
+            label: 'POST 表单模板',
+            help: '例如 s={{key}}；只有 post 时用得到',
           ),
         ],
       ),
